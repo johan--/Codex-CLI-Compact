@@ -891,9 +891,9 @@ def main() -> int:
     # Pass host/port at construction so FastMCP skips DNS-rebinding protection
     # (it only activates when host is 127.0.0.1/localhost — not 0.0.0.0).
     mcp = build_server(host="0.0.0.0", port=port)
-    # Use SSE transport so the server is reachable over HTTP from Codex/Claude.
-    # Codex: codex --mcp-server-uri https://<railway-url>/sse "your task"
-    mcp.run(transport="sse")
+    # Streamable HTTP transport — required by codex mcp add --url.
+    # Endpoint: /mcp  (FastMCP default for streamable-http)
+    mcp.run(transport="streamable-http")
     return 0
 
 
