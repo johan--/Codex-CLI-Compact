@@ -319,13 +319,13 @@ def _search_action_history(query: str, limit: int = 10) -> dict[str, Any]:
     return {"action_hits": action_hits, "file_hits": file_hits[:limit]}
 
 
-def build_server() -> Any:
+def build_server(host: str = "0.0.0.0", port: int = 8080) -> Any:
     if FastMCP is None:
         raise RuntimeError(
             "Missing dependency: 'mcp'. Install with: python3 -m pip install mcp"
         )
 
-    mcp = FastMCP("dual-graph-mcp")
+    mcp = FastMCP("dual-graph-mcp", host=host, port=port)
 
     @mcp.tool()
     def graph_retrieve(query: str, top_files: int = 5, top_edges: int = 12) -> dict[str, Any]:
@@ -781,11 +781,10 @@ def build_server() -> Any:
 
 
 def main() -> int:
-    mcp = build_server()
     port = int(os.environ.get("PORT", 8080))
-    # Set host/port on settings object — env vars are not reliably picked up.
-    mcp.settings.host = "0.0.0.0"
-    mcp.settings.port = port
+    # Pass host/port at construction so FastMCP skips DNS-rebinding protection
+    # (it only activates when host is 127.0.0.1/localhost — not 0.0.0.0).
+    mcp = build_server(host="0.0.0.0", port=port)
     # Use SSE transport so the server is reachable over HTTP from Codex/Claude.
     # Codex: codex --mcp-server-uri https://<railway-url>/sse "your task"
     mcp.run(transport="sse")
