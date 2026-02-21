@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# dg — Dual-Graph launcher for Codex CLI
+# dgc — Dual-Graph launcher for Claude Code CLI
 #
 # Usage:
-#   dg                          # scan current directory, start codex
-#   dg /path/to/project         # scan given project, start codex
-#   dg /path/to/project "task"  # scan and start with a prompt
+#   dgc                          # scan current directory, start claude
+#   dgc /path/to/project         # scan given project, start claude
+#   dgc /path/to/project "task"  # scan and start with a prompt
 #
 # Setup (one time):
 #   curl -sSL https://codex-cli-compact-production.up.railway.app/install.sh | bash
 #   source ~/.zshrc
-#   codex mcp add dual-graph --url https://codex-cli-compact-production.up.railway.app/mcp
+#   claude mcp add dual-graph --url https://codex-cli-compact-production.up.railway.app/mcp
 
 set -euo pipefail
 
@@ -19,15 +19,15 @@ PROJECT="$(cd "$PROJECT" && pwd)"   # resolve to absolute
 PROMPT="${2:-}"
 RAILWAY_URL="${DG_RAILWAY_URL:-https://codex-cli-compact-production.up.railway.app}"
 
-echo "[dg] Project : $PROJECT"
-echo "[dg] Server  : $RAILWAY_URL"
+echo "[dgc] Project : $PROJECT"
+echo "[dgc] Server  : $RAILWAY_URL"
 echo ""
 
-# ── Inject CODEX.md policy into project (idempotent) ─────────────────────────
-CODEX_MD="$PROJECT/CODEX.md"
-if [[ ! -f "$CODEX_MD" ]]; then
-  echo "[dg] Creating CODEX.md ..."
-  cat > "$CODEX_MD" << CODEX_EOF
+# ── Inject CLAUDE.md policy into project (idempotent) ────────────────────────
+CLAUDE_MD="$PROJECT/CLAUDE.md"
+if [[ ! -f "$CLAUDE_MD" ]]; then
+  echo "[dgc] Creating CLAUDE.md ..."
+  cat > "$CLAUDE_MD" << CLAUDE_EOF
 # Dual-Graph Context Policy
 
 This project uses a dual-graph MCP server for efficient context retrieval.
@@ -52,34 +52,34 @@ This project uses a dual-graph MCP server for efficient context retrieval.
 - Do NOT dump full chat history.
 - Do NOT call \`graph_retrieve\` more than once per turn.
 - After edits, call \`graph_register_edit\` with the changed files.
-CODEX_EOF
-  echo "[dg] CODEX.md created."
+CLAUDE_EOF
+  echo "[dgc] CLAUDE.md created."
 else
-  echo "[dg] CODEX.md already exists, skipping."
+  echo "[dgc] CLAUDE.md already exists, skipping."
 fi
 
 # ── Build graph locally ───────────────────────────────────────────────────────
-echo "[dg] Scanning project..."
+echo "[dgc] Scanning project..."
 python3 "$SCRIPT_DIR/graph_builder.py" --root "$PROJECT" --out /tmp/dg_graph.json
-echo "[dg] Scan complete."
+echo "[dgc] Scan complete."
 
 # ── Upload graph to Railway ───────────────────────────────────────────────────
-echo "[dg] Uploading graph to $RAILWAY_URL ..."
+echo "[dgc] Uploading graph to $RAILWAY_URL ..."
 RESULT=$(curl -sf -X POST "$RAILWAY_URL/ingest-graph" \
   -H "Content-Type: application/json" \
-  --data-binary @/tmp/dg_graph.json 2>&1) && echo "[dg] $RESULT" || {
-  echo "[dg] Upload failed: $RESULT"
-  echo "[dg] Is the server reachable? Check: $RAILWAY_URL/mcp"
+  --data-binary @/tmp/dg_graph.json 2>&1) && echo "[dgc] $RESULT" || {
+  echo "[dgc] Upload failed: $RESULT"
+  echo "[dgc] Is the server reachable? Check: $RAILWAY_URL/mcp"
   exit 1
 }
 
 echo ""
-echo "[dg] Starting codex..."
+echo "[dgc] Starting claude..."
 echo ""
 
-# ── Start Codex ───────────────────────────────────────────────────────────────
+# ── Start Claude Code ─────────────────────────────────────────────────────────
 if [[ -n "$PROMPT" ]]; then
-  codex -C "$PROJECT" "$PROMPT"
+  claude --add-dir "$PROJECT" "$PROMPT"
 else
-  codex -C "$PROJECT"
+  claude --add-dir "$PROJECT"
 fi

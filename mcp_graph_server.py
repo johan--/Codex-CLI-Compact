@@ -929,8 +929,10 @@ def main() -> int:
         return Response(gb.read_text(encoding="utf-8"), media_type="text/plain")
 
     async def serve_dg(request: Request) -> Response:
-        dg = _HERE / "dg"
-        return Response(dg.read_text(encoding="utf-8"), media_type="text/plain")
+        return Response((_HERE / "dg").read_text(encoding="utf-8"), media_type="text/plain")
+
+    async def serve_dgc(request: Request) -> Response:
+        return Response((_HERE / "dgc").read_text(encoding="utf-8"), media_type="text/plain")
 
     async def serve_install(request: Request) -> Response:
         base = str(request.base_url).rstrip("/")
@@ -944,9 +946,13 @@ mkdir -p "$INSTALL_DIR"
 echo "[install] Downloading graph_builder.py..."
 curl -sSL "$RAILWAY_URL/graph_builder.py" -o "$INSTALL_DIR/graph_builder.py"
 
-echo "[install] Downloading dg..."
+echo "[install] Downloading dg (Codex CLI)..."
 curl -sSL "$RAILWAY_URL/dg" -o "$INSTALL_DIR/dg"
 chmod +x "$INSTALL_DIR/dg"
+
+echo "[install] Downloading dgc (Claude Code)..."
+curl -sSL "$RAILWAY_URL/dgc" -o "$INSTALL_DIR/dgc"
+chmod +x "$INSTALL_DIR/dgc"
 
 # Add to PATH if not already there
 SHELL_RC="$HOME/.zshrc"
@@ -957,12 +963,18 @@ if ! grep -q '.dual-graph' "$SHELL_RC" 2>/dev/null; then
 fi
 
 echo ""
-echo "[install] Done. Run these once:"
+echo "[install] Done! Run these once:"
 echo "  source $SHELL_RC"
+echo ""
+echo "  # Register for Codex CLI:"
 echo "  codex mcp add dual-graph --url $RAILWAY_URL/mcp"
 echo ""
-echo "[install] Then for every project:"
-echo "  dg /path/to/project"
+echo "  # Register for Claude Code:"
+echo "  claude mcp add dual-graph --url $RAILWAY_URL/mcp"
+echo ""
+echo "Then per project:"
+echo "  dg /path/to/project    # Codex CLI"
+echo "  dgc /path/to/project   # Claude Code"
 """
         return Response(script, media_type="text/plain")
 
@@ -976,6 +988,7 @@ echo "  dg /path/to/project"
     mcp_app.router.routes[0:0] = [
         Route("/ingest-graph", ingest_graph, methods=["POST"]),
         Route("/install.sh", serve_install, methods=["GET"]),
+        Route("/dgc", serve_dgc, methods=["GET"]),
         Route("/dg", serve_dg, methods=["GET"]),
         Route("/graph_builder.py", serve_graph_builder, methods=["GET"]),
     ]
