@@ -922,9 +922,59 @@ def main() -> int:
             "edge_count": graph.get("edge_count", len(graph["edges"])),
         })
 
+    # ── Static file routes: serve dg + graph_builder so users can curl-install ──
+    from starlette.responses import Response
+
+    _HERE = Path(__file__).resolve().parent
+
+    async def serve_graph_builder(request: Request) -> Response:
+        gb = _HERE / "graph_builder.py"
+        return Response(gb.read_text(encoding="utf-8"), media_type="text/plain")
+
+    async def serve_dg(request: Request) -> Response:
+        dg = _HERE / "dg"
+        return Response(dg.read_text(encoding="utf-8"), media_type="text/plain")
+
+    async def serve_install(request: Request) -> Response:
+        base = str(request.base_url).rstrip("/")
+        script = f"""\
+#!/usr/bin/env bash
+set -euo pipefail
+RAILWAY_URL="{base}"
+INSTALL_DIR="$HOME/.dual-graph"
+mkdir -p "$INSTALL_DIR"
+
+echo "[install] Downloading graph_builder.py..."
+curl -sSL "$RAILWAY_URL/graph_builder.py" -o "$INSTALL_DIR/graph_builder.py"
+
+echo "[install] Downloading dg..."
+curl -sSL "$RAILWAY_URL/dg" -o "$INSTALL_DIR/dg"
+chmod +x "$INSTALL_DIR/dg"
+
+# Add to PATH if not already there
+SHELL_RC="$HOME/.zshrc"
+[[ "$SHELL" == */bash ]] && SHELL_RC="$HOME/.bashrc"
+if ! grep -q '.dual-graph' "$SHELL_RC" 2>/dev/null; then
+  echo 'export PATH="$PATH:$HOME/.dual-graph"' >> "$SHELL_RC"
+  echo "[install] Added ~/.dual-graph to PATH in $SHELL_RC"
+fi
+
+echo ""
+echo "[install] Done. Run these once:"
+echo "  source $SHELL_RC"
+echo "  codex mcp add dual-graph --url $RAILWAY_URL/mcp"
+echo ""
+echo "[install] Then for every project:"
+echo "  dg /path/to/project"
+"""
+        return Response(script, media_type="text/plain")
+
     mcp_app = mcp.streamable_http_app()
     app = Starlette(routes=[
         Route("/ingest-graph", ingest_graph, methods=["POST"]),
+        Route("/install.sh", serve_install, methods=["GET"]),
+        Route("/dg", serve_dg, methods=["GET"]),
+        Route("/graph_builder.py", serve_graph_builder, methods=["GET"]),
         Mount("/", app=mcp_app),
     ])
 
