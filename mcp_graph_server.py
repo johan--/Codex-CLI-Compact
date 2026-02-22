@@ -30,6 +30,11 @@ try:
 except Exception:  # noqa: BLE001
     _gb_scan = None  # type: ignore[assignment]
 
+try:
+    from dg import retrieve as _dg_retrieve
+except Exception:  # noqa: BLE001
+    _dg_retrieve = None  # type: ignore[assignment]
+
 
 DG_BASE = os.environ.get("DG_BASE_URL", "http://127.0.0.1:8787")
 DG_API_TOKEN = os.environ.get("DG_API_TOKEN", "").strip()
@@ -91,6 +96,38 @@ def _get(path: str) -> dict[str, Any]:
         req.add_header("authorization", f"Bearer {DG_API_TOKEN}")
     with urllib.request.urlopen(req, timeout=60) as resp:
         return json.loads(resp.read().decode("utf-8"))
+
+
+def _local_info_graph() -> dict[str, Any] | None:
+    """Read the info-graph from local DG_DATA_DIR without HTTP. Returns None if unavailable."""
+    graph_json = DG_DATA_DIR / "info_graph.json"
+    if not graph_json.exists():
+        return None
+    try:
+        return json.loads(graph_json.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _local_chat_fix(query: str, top_files: int, top_edges: int) -> dict[str, Any] | None:
+    """Run retrieval locally from the graph file, bypassing /api/chat-fix HTTP call.
+    Returns None if local retrieval is unavailable (falls back to HTTP)."""
+    if _dg_retrieve is None:
+        return None
+    g = _local_info_graph()
+    if g is None:
+        return None
+    try:
+        rel = _dg_retrieve(g, query, top_files, top_edges)
+        return {
+            "ok": True,
+            "query": query,
+            "graph_files": rel.files,
+            "graph_edges": rel.edges,
+            "grep_hits": [],
+        }
+    except Exception:
+        return None
 
 
 def _is_local_file_ref(value: str) -> bool:
@@ -389,7 +426,7 @@ def build_server(host: str = "0.0.0.0", port: int = 8080) -> Any:
             return out
         _log_tool("graph_retrieve", {"query": query, "top_files": top_files, "top_edges": top_edges})
         _record_action("retrieve", {"query": query, "top_files": top_files, "top_edges": top_edges})
-        out = _post(
+        out = _local_chat_fix(query, top_files, top_edges) or _post(
             "/api/chat-fix",
             {"query": query, "top_files": top_files, "top_edges": top_edges, "max_grep_hits": 0},
         )
@@ -651,7 +688,7 @@ def build_server(host: str = "0.0.0.0", port: int = 8080) -> Any:
     def graph_neighbors(file: str, limit: int = 30) -> dict[str, Any]:
         """Return graph edges touching a file."""
         _log_tool("graph_neighbors", {"file": file, "limit": limit})
-        g = _get("/api/info-graph?full=1")
+        g = _local_info_graph() or _get("/api/info-graph?full=1")
         edges = g.get("edges", [])
         out = []
         for edge in edges:
@@ -666,7 +703,7 @@ def build_server(host: str = "0.0.0.0", port: int = 8080) -> Any:
         """Return connected local files likely impacted by edits."""
         _log_tool("graph_impact", {"changed_files": changed_files})
         _record_action("impact", {"changed_files": changed_files})
-        g = _get("/api/info-graph?full=1")
+        g = _local_info_graph() or _get("/api/info-graph?full=1")
         edges = g.get("edges", [])
         changed = set(changed_files)
         connected: set[str] = set()
