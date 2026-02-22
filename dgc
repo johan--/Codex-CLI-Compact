@@ -109,10 +109,10 @@ MCP_PID=$!
 # Kill server when claude exits
 trap 'echo ""; echo "[dgc] Shutting down MCP server..."; kill $MCP_PID 2>/dev/null' EXIT
 
-# Wait for MCP server to be ready (up to 20s)
+# Wait for MCP server to be ready (up to 20s, TCP-level check)
 echo "[dgc] Waiting for MCP server..."
 for i in $(seq 1 20); do
-  if curl -sf "http://localhost:$MCP_PORT/mcp" -o /dev/null 2>/dev/null; then
+  if nc -z localhost $MCP_PORT 2>/dev/null; then
     break
   fi
   sleep 1
