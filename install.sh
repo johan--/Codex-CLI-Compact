@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Dual-Graph one-time setup
+# Usage: curl -sSL https://raw.githubusercontent.com/kunal12203/Codex-CLI-Compact/main/install.sh | bash
+
+set -euo pipefail
+
+BASE_URL="https://raw.githubusercontent.com/kunal12203/Codex-CLI-Compact/main"
+INSTALL_DIR="$HOME/.dual-graph"
+mkdir -p "$INSTALL_DIR"
+
+echo "[install] Downloading files..."
+curl -sSL "$BASE_URL/graph_builder.py"    -o "$INSTALL_DIR/graph_builder.py"
+curl -sSL "$BASE_URL/mcp_graph_server.py" -o "$INSTALL_DIR/mcp_graph_server.py"
+curl -sSL "$BASE_URL/dg"  -o "$INSTALL_DIR/dg"  && chmod +x "$INSTALL_DIR/dg"
+curl -sSL "$BASE_URL/dgc" -o "$INSTALL_DIR/dgc" && chmod +x "$INSTALL_DIR/dgc"
+
+echo "[install] Installing Python dependencies..."
+python3 -m pip install "mcp>=1.3.0" uvicorn anyio starlette --quiet
+
+# Add to PATH if not already there
+SHELL_RC="$HOME/.zshrc"
+[[ "$SHELL" == */bash ]] && SHELL_RC="$HOME/.bashrc"
+if ! grep -q '.dual-graph' "$SHELL_RC" 2>/dev/null; then
+  echo 'export PATH="$PATH:$HOME/.dual-graph"' >> "$SHELL_RC"
+  echo "[install] Added ~/.dual-graph to PATH in $SHELL_RC"
+fi
+
+echo ""
+echo "[install] Done! Run once:"
+echo "  source $SHELL_RC"
+echo ""
+echo "  # Claude Code:"
+echo "  claude mcp add --transport http dual-graph http://localhost:8080/mcp"
+echo ""
+echo "  # Codex CLI:"
+echo "  codex mcp add dual-graph --url https://codex-cli-compact-production.up.railway.app/mcp"
+echo ""
+echo "Then per project:"
+echo "  dgc /path/to/project   # Claude Code (local, private)"
+echo "  dg  /path/to/project   # Codex CLI   (Railway)"
