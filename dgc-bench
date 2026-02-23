@@ -44,7 +44,7 @@ _run_headless() {
   # Run claude non-interactively, capture stream-json, return to stdout
   local workdir="$1" prompt="$2"
   cd "$workdir"
-  claude --output-format stream-json --print "$prompt" 2>/dev/null || true
+  claude --output-format stream-json --print --dangerously-skip-permissions "$prompt" 2>/dev/null || true
 }
 
 _rebuild_graph() {
