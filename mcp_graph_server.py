@@ -834,9 +834,15 @@ def build_server(host: str = "0.0.0.0", port: int = 8080) -> Any:
             out = {
                 "ok": True,
                 "mode": "memory_first",
+                "confidence": "high",
+                "max_supplementary_greps": 0,
+                "max_supplementary_files": 0,
                 "query": query,
                 "recommended_files": rec,
-                "instruction": "Use graph_read on recommended_files first; avoid new retrieval unless insufficient.",
+                "instruction": (
+                    "confidence=high: Use graph_read on recommended_files only. "
+                    "Do NOT grep or explore further."
+                ),
             }
             _log_tool("graph_continue", {"query": query, "mode": "memory_first", "recommended_files": rec})
             _record_action("continue_memory_first", {"query": query, "recommended_files": rec})
@@ -844,15 +850,47 @@ def build_server(host: str = "0.0.0.0", port: int = 8080) -> Any:
 
         # No relevant memory: do single retrieval and return compact suggestions.
         retrieved = graph_retrieve(query=query, top_files=top_files, top_edges=top_edges)
-        rec_files = [str(f.get("id", "")) for f in retrieved.get("graph_files", []) if str(f.get("id", ""))]
+        graph_files = retrieved.get("graph_files", [])
+        rec_files = [str(f.get("id", "")) for f in graph_files if str(f.get("id", ""))]
+
+        # ── Confidence tier based on top file score ───────────────────────────
+        # Scores are integers from dg.score_node: 10+ = strong match, 4-9 = moderate, <4 = weak.
+        top_score = int(graph_files[0].get("_score", 0)) if graph_files else 0
+        if top_score >= 10:
+            confidence = "high"
+            max_supp_greps = 0
+            max_supp_files = 0
+            supp_note = "Do NOT grep or explore further."
+        elif top_score >= 4:
+            confidence = "medium"
+            max_supp_greps = 2
+            max_supp_files = 2
+            supp_note = (
+                f"If recommended files are insufficient after reading, you MAY call "
+                f"fallback_rg at most {max_supp_greps} time(s) with specific terms, "
+                f"then graph_read at most {max_supp_files} additional file(s). Then stop."
+            )
+        else:
+            confidence = "low"
+            max_supp_greps = 3
+            max_supp_files = 3
+            supp_note = (
+                f"Graph confidence is low. Call fallback_rg at most {max_supp_greps} time(s) "
+                f"with specific terms, then graph_read at most {max_supp_files} file(s). "
+                f"Do NOT do broad recursive exploration."
+            )
+
         out = {
             "ok": True,
             "mode": "retrieve_then_read",
+            "confidence": confidence,
+            "max_supplementary_greps": max_supp_greps,
+            "max_supplementary_files": max_supp_files,
             "query": query,
             "recommended_files": rec_files[: min(3, len(rec_files))],
-            "instruction": "Use graph_read on recommended_files; do not dump full chat history.",
+            "instruction": f"confidence={confidence}: Read recommended_files first. {supp_note}",
         }
-        _log_tool("graph_continue", {"query": query, "mode": "retrieve_then_read", "recommended_files": out["recommended_files"]})
+        _log_tool("graph_continue", {"query": query, "mode": "retrieve_then_read", "confidence": confidence, "recommended_files": out["recommended_files"]})
         _record_action("continue_retrieve", {"query": query, "recommended_files": out["recommended_files"]})
         return out
 

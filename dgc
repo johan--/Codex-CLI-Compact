@@ -46,11 +46,11 @@ if [[ -f "$PROJECT/.gitignore" ]] && ! grep -qx '.dual-graph/' "$PROJECT/.gitign
   echo "[dgc] Added .dual-graph/ to .gitignore"
 fi
 
-# ── Inject CLAUDE.md policy into project (idempotent) ────────────────────────
+# ── Inject CLAUDE.md policy into project (create or upgrade to v3) ───────────
 CLAUDE_MD="$PROJECT/CLAUDE.md"
-if [[ ! -f "$CLAUDE_MD" ]]; then
-  echo "[dgc] Creating CLAUDE.md ..."
+_write_claude_md() {
   cat > "$CLAUDE_MD" << 'CLAUDE_EOF'
+<!-- dgc-policy-v3 -->
 # Dual-Graph Context Policy
 
 This project uses a local dual-graph MCP server for efficient context retrieval.
@@ -59,23 +59,40 @@ This project uses a local dual-graph MCP server for efficient context retrieval.
 
 1. **Call `graph_continue` first** — before any file exploration, grep, or code reading.
 
-2. **If `graph_continue` returns `needs_project=true`**, call `graph_scan` with the
-   current project directory (run `pwd` to get it). Do NOT ask the user.
+2. **If `graph_continue` returns `needs_project=true`**: call `graph_scan` with the
+   current project directory (`pwd`). Do NOT ask the user.
 
-3. **If `graph_continue` returns `mode=memory_first`**: use `graph_read` on `recommended_files` only.
+3. **Read `recommended_files`** using `graph_read`.
 
-4. **If `graph_continue` returns `mode=retrieve_then_read`**: use `graph_read` on `recommended_files`.
+4. **Check `confidence` and obey the caps strictly:**
+   - `confidence=high` → Stop. Do NOT grep or explore further.
+   - `confidence=medium` → If recommended files are insufficient, call `fallback_rg`
+     at most `max_supplementary_greps` time(s) with specific terms, then `graph_read`
+     at most `max_supplementary_files` additional file(s). Then stop.
+   - `confidence=low` → Call `fallback_rg` at most `max_supplementary_greps` time(s),
+     then `graph_read` at most `max_supplementary_files` file(s). Then stop.
 
 ## Rules
 
 - Do NOT use `rg`, `grep`, or bash file exploration before calling `graph_continue`.
+- Do NOT do broad/recursive exploration at any confidence level.
+- `max_supplementary_greps` and `max_supplementary_files` are hard caps — never exceed them.
 - Do NOT dump full chat history.
 - Do NOT call `graph_retrieve` more than once per turn.
 - After edits, call `graph_register_edit` with the changed files.
 CLAUDE_EOF
+}
+
+if [[ ! -f "$CLAUDE_MD" ]]; then
+  echo "[dgc] Creating CLAUDE.md ..."
+  _write_claude_md
   echo "[dgc] CLAUDE.md created."
+elif grep -q "graph_continue" "$CLAUDE_MD" && ! grep -q "dgc-policy-v3" "$CLAUDE_MD"; then
+  echo "[dgc] Upgrading CLAUDE.md to v3 policy ..."
+  _write_claude_md
+  echo "[dgc] CLAUDE.md upgraded."
 else
-  echo "[dgc] CLAUDE.md already exists, skipping."
+  echo "[dgc] CLAUDE.md already up to date, skipping."
 fi
 
 # ── Scan project → local .dual-graph/info_graph.json ─────────────────────────
