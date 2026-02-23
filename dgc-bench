@@ -95,12 +95,11 @@ inp = out = 0
 for line in open(files[-1]):
     try:
         obj = json.loads(line.strip())
-        for u in [obj.get('usage'), (obj.get('message') or {}).get('usage')]:
-            if isinstance(u, dict):
-                inp = max(inp, u.get('input_tokens', 0) or 0)
-                out = max(out, u.get('output_tokens', 0) or 0)
-        inp = max(inp, obj.get('total_input_tokens', 0) or 0)
-        out = max(out, obj.get('total_output_tokens', 0) or 0)
+        u = obj.get('usage') or (obj.get('message') or {}).get('usage') or {}
+        if u:
+            inp += (u.get('input_tokens', 0) or 0) + \
+                   (u.get('cache_creation_input_tokens', 0) or 0)
+            out += (u.get('output_tokens', 0) or 0)
     except: pass
 print(inp + out)
 PYEOF
@@ -321,12 +320,12 @@ for line in open(files[-1]):
                     if isinstance(b, dict) and b.get('type') == 'text':
                         t = b.get('text', '').strip()
                         if t: prompts.append(t[:120])
-        for u in [obj.get('usage'), (obj.get('message') or {}).get('usage')]:
-            if isinstance(u, dict):
-                inp = max(inp, u.get('input_tokens', 0) or 0)
-                out = max(out, u.get('output_tokens', 0) or 0)
-        inp = max(inp, obj.get('total_input_tokens', 0) or 0)
-        out = max(out, obj.get('total_output_tokens', 0) or 0)
+        # Effective tokens = new tokens created (not cache re-reads)
+        u = obj.get('usage') or (obj.get('message') or {}).get('usage') or {}
+        if u:
+            inp += (u.get('input_tokens', 0) or 0) + \
+                   (u.get('cache_creation_input_tokens', 0) or 0)
+            out += (u.get('output_tokens', 0) or 0)
     except: pass
 
 total = inp + out
