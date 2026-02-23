@@ -19,7 +19,6 @@ PROJECT="$(cd "$PROJECT" && pwd)"   # resolve to absolute
 PROMPT="${2:-}"
 MCP_PORT=8080
 DATA_DIR="$PROJECT/.dual-graph"
-PLIST="$HOME/Library/LaunchAgents/com.dual-graph.mcp.plist"
 
 # ── Ensure venv + deps exist ──────────────────────────────────────────────────
 if [[ ! -x "$VENV/bin/python3" ]]; then
@@ -101,47 +100,24 @@ echo "[dgc] Scanning project..."
 echo "[dgc] Scan complete."
 echo ""
 
-# ── Register persistent launchd service (survives reboots) ───────────────────
-mkdir -p "$HOME/Library/LaunchAgents"
-cat > "$PLIST" << PLIST_EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.dual-graph.mcp</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>$PYTHON</string>
-        <string>$SCRIPT_DIR/mcp_graph_server.py</string>
-    </array>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>DG_DATA_DIR</key>
-        <string>$DATA_DIR</string>
-        <key>DUAL_GRAPH_PROJECT_ROOT</key>
-        <string>$PROJECT</string>
-        <key>DG_BASE_URL</key>
-        <string>http://localhost:$MCP_PORT</string>
-        <key>PORT</key>
-        <string>$MCP_PORT</string>
-    </dict>
-    <key>StandardOutPath</key>
-    <string>$DATA_DIR/mcp_server.log</string>
-    <key>StandardErrorPath</key>
-    <string>$DATA_DIR/mcp_server.log</string>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-</dict>
-</plist>
-PLIST_EOF
+# ── Start MCP server as background process ───────────────────────────────────
+# Kill any existing server on this port
+EXISTING_PID=$(lsof -ti :$MCP_PORT 2>/dev/null || true)
+if [[ -n "$EXISTING_PID" ]]; then
+  kill "$EXISTING_PID" 2>/dev/null || true
+  sleep 0.5
+fi
 
-# Reload the service (stop old, start new with current project)
-launchctl unload "$PLIST" 2>/dev/null || true
-launchctl load "$PLIST"
-echo "[dgc] MCP server registered as persistent service (auto-starts on login)."
+# Start server directly (nohup so it survives terminal close)
+nohup env \
+  DG_DATA_DIR="$DATA_DIR" \
+  DUAL_GRAPH_PROJECT_ROOT="$PROJECT" \
+  DG_BASE_URL="http://localhost:$MCP_PORT" \
+  PORT="$MCP_PORT" \
+  "$PYTHON" "$SCRIPT_DIR/mcp_graph_server.py" \
+  >> "$DATA_DIR/mcp_server.log" 2>&1 &
+MCP_PID=$!
+echo "$MCP_PID" > "$DATA_DIR/mcp_server.pid"
 
 # Wait for MCP server to be ready (up to 20s, TCP-level check)
 echo "[dgc] Waiting for MCP server..."
@@ -152,7 +128,7 @@ for i in $(seq 1 20); do
   sleep 1
 done
 
-echo "[dgc] MCP server ready on port $MCP_PORT."
+echo "[dgc] MCP server ready on port $MCP_PORT (PID $MCP_PID)."
 echo ""
 
 # ── Update claude MCP config ──────────────────────────────────────────────────
