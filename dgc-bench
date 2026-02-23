@@ -40,11 +40,13 @@ print(inp + out)
 PYEOF
 }
 
+_BENCH_STDERR="/tmp/dgc_bench_stderr.log"
+
 _run_headless() {
-  # Run claude non-interactively, capture stream-json, return to stdout
+  # Run claude non-interactively, capture stream-json to stdout, stderr to debug log
   local workdir="$1" prompt="$2"
   cd "$workdir"
-  claude --output-format stream-json --print --dangerously-skip-permissions "$prompt" 2>/dev/null || true
+  claude --output-format stream-json --print --dangerously-skip-permissions "$prompt" 2>"$_BENCH_STDERR" || true
 }
 
 _rebuild_graph() {
@@ -309,6 +311,9 @@ PYEOF
     WITH_TOK=$(echo "$WITH_OUT" | _tokens_from_stream)
 
     echo "  ✓ WITH graph    : ${WITH_TOK} tokens  (${DUR_WITH}s)"
+    if [[ "$WITH_TOK" -eq 0 && -s "$_BENCH_STDERR" ]]; then
+      echo "  [debug] claude stderr: $(head -3 "$_BENCH_STDERR")" >&2
+    fi
 
     # ── RUN 2: WITHOUT graph ──────────────────────────────────────────────────
     echo "  [2/2] Running WITHOUT dual-graph..."
@@ -324,6 +329,9 @@ PYEOF
     WITHOUT_TOK=$(echo "$WITHOUT_OUT" | _tokens_from_stream)
 
     echo "  ✓ WITHOUT graph : ${WITHOUT_TOK} tokens  (${DUR_WITHOUT}s)"
+    if [[ "$WITHOUT_TOK" -eq 0 && -s "$_BENCH_STDERR" ]]; then
+      echo "  [debug] claude stderr: $(head -3 "$_BENCH_STDERR")" >&2
+    fi
 
     # ── Per-task result ───────────────────────────────────────────────────────
     SAVED=$((WITHOUT_TOK - WITH_TOK))
