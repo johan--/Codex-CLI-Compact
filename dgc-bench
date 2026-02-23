@@ -271,6 +271,130 @@ _log_run() {
   echo "{\"ts\":\"$1\",\"project\":\"$2\",\"mode\":\"$3\",\"prompt\":\"$4\",\"tokens_with\":$5,\"tokens_without\":$6,\"dur_with\":$7,\"dur_without\":$8}" >> "$BENCH_LOG"
 }
 
+# ── Save session mode ─────────────────────────────────────────────────────────
+# Usage: dgc-bench --save /path/to/project "label"
+# Run this after finishing a claude session to log its tokens + prompts.
+if [[ "${1:-}" == "--save" ]]; then
+  if [[ $# -lt 3 ]]; then
+    echo "Usage: dgc-bench --save /path/to/project \"label\""
+    exit 1
+  fi
+  PROJECT="$(cd "$2" && pwd)"
+  LABEL="$3"
+  "$PYTHON" - "$PROJECT" "$LABEL" "$BENCH_LOG" << 'PYEOF'
+import sys, json, datetime
+from pathlib import Path
+
+project, label, bench_log = sys.argv[1], sys.argv[2], sys.argv[3]
+encoded = project.replace('/', '-')
+sessions_dir = Path.home() / '.claude' / 'projects' / encoded
+if not sessions_dir.exists():
+    print(f"  No session data found for: {project}")
+    print(f"  Expected: {sessions_dir}")
+    exit(1)
+files = sorted(sessions_dir.glob('*.jsonl'), key=lambda f: f.stat().st_mtime)
+if not files:
+    print("  No session files found."); exit(1)
+
+inp = out = 0
+prompts = []
+for line in open(files[-1]):
+    try:
+        obj = json.loads(line.strip())
+        role = (obj.get('message') or {}).get('role', '')
+        if role == 'user':
+            content = (obj.get('message') or {}).get('content', '')
+            if isinstance(content, str) and content.strip():
+                prompts.append(content.strip()[:120])
+            elif isinstance(content, list):
+                for b in content:
+                    if isinstance(b, dict) and b.get('type') == 'text':
+                        t = b.get('text', '').strip()
+                        if t: prompts.append(t[:120])
+        for u in [obj.get('usage'), (obj.get('message') or {}).get('usage')]:
+            if isinstance(u, dict):
+                inp = max(inp, u.get('input_tokens', 0) or 0)
+                out = max(out, u.get('output_tokens', 0) or 0)
+        inp = max(inp, obj.get('total_input_tokens', 0) or 0)
+        out = max(out, obj.get('total_output_tokens', 0) or 0)
+    except: pass
+
+total = inp + out
+print()
+print(f"  Label   : {label}")
+print(f"  Project : {project}")
+print(f"  Tokens  : {total:,}  (input: {inp:,} + output: {out:,})")
+if prompts:
+    print(f"  Prompts : {len(prompts)}")
+    for i, p in enumerate(prompts[:6], 1):
+        print(f"    {i}. {p}")
+
+ts = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+with open(bench_log, 'a') as f:
+    f.write(json.dumps({
+        "ts": ts, "label": label, "project": project,
+        "mode": "session", "tokens": total,
+        "inp": inp, "out": out, "prompts": prompts
+    }) + '\n')
+print(f"\n  Saved to: {bench_log}")
+print(f"  Run 'dgc-bench --compare with-graph without-graph' to compare.")
+PYEOF
+  exit 0
+fi
+
+# ── Compare two saved sessions ────────────────────────────────────────────────
+# Usage: dgc-bench --compare "label-a" "label-b"
+if [[ "${1:-}" == "--compare" ]]; then
+  LABEL_A="${2:-with-graph}"
+  LABEL_B="${3:-without-graph}"
+  [[ ! -f "$BENCH_LOG" ]] && echo "No sessions saved yet. Run dgc-bench --save first." && exit 0
+  "$PYTHON" - "$BENCH_LOG" "$LABEL_A" "$LABEL_B" << 'PYEOF'
+import sys, json
+bench_log, la, lb = sys.argv[1], sys.argv[2], sys.argv[3]
+sessions = {}
+for line in open(bench_log):
+    try:
+        obj = json.loads(line.strip())
+        if obj.get('mode') == 'session':
+            sessions[obj['label']] = obj
+    except: pass
+a = sessions.get(la)
+b = sessions.get(lb)
+if not a or not b:
+    have = list(sessions.keys())
+    print(f"Missing sessions. Have: {have}")
+    print(f"Save them first with: dgc-bench --save /path label")
+    exit(1)
+ta, tb = a['tokens'], b['tokens']
+saved = tb - ta
+pct = saved/tb*100 if tb else 0
+print()
+print("╔═══════════════════════════════════════════════════════════╗")
+print("║                  SESSION COMPARISON                      ║")
+print("╠═══════════════════════════════════════════════════════════╣")
+print(f"║  {la:<24}: {ta:>10,} tokens              ║")
+print(f"║  {lb:<24}: {tb:>10,} tokens              ║")
+print("╠═══════════════════════════════════════════════════════════╣")
+print(f"║  Tokens saved         : {saved:>10,}                    ║")
+print(f"║  Reduction            : {pct:>10.1f}%                    ║")
+cost_a = ta * 9 / 1_000_000
+cost_b = tb * 9 / 1_000_000
+print("╠═══════════════════════════════════════════════════════════╣")
+print(f"║  Est. cost {la:<14}: ${cost_a:>8.4f}                    ║")
+print(f"║  Est. cost {lb:<14}: ${cost_b:>8.4f}                    ║")
+print(f"║  Money saved          : ${cost_b-cost_a:>8.4f}                    ║")
+print("╠═══════════════════════════════════════════════════════════╣")
+pa, pb = a.get('prompts',[]), b.get('prompts',[])
+print(f"║  Prompts (with)       : {len(pa):<35}║")
+for i,p in enumerate(pa[:4],1): print(f"║    {i}. {p[:52]:<52} ║")
+print(f"║  Prompts (without)    : {len(pb):<35}║")
+for i,p in enumerate(pb[:4],1): print(f"║    {i}. {p[:52]:<52} ║")
+print("╚═══════════════════════════════════════════════════════════╝")
+print()
+PYEOF
+  exit 0
+fi
+
 # ── Report mode ───────────────────────────────────────────────────────────────
 if [[ "${1:-}" == "--report" ]]; then
   [[ ! -f "$BENCH_LOG" ]] && echo "No data yet. Run dgc-bench first." && exit 0
