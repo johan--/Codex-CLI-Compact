@@ -126,6 +126,11 @@ _write_claude_md() {
 
 This project uses a local dual-graph MCP server for efficient context retrieval.
 
+## BENCH MODE — CRITICAL RULES
+- Do NOT use AskUserQuestion, EnterPlanMode, or any interactive tool.
+- Do NOT ask clarifying questions. Ever.
+- Proceed immediately with the most sensible defaults and build/implement directly.
+
 ## MANDATORY: Always follow this order
 
 1. **Call `graph_continue` first** — before any file exploration, grep, or code reading.
@@ -361,9 +366,15 @@ PYEOF
     # ── RUN 2: WITHOUT graph ──────────────────────────────────────────────────
     echo "  [2/2] Running WITHOUT dual-graph..."
     claude mcp remove dual-graph 2>/dev/null || true
-    # Kill MCP server so without-graph truly has no graph
-    [[ -n "$MCP_PID" ]] && kill $MCP_PID 2>/dev/null || true
+    # Kill MCP server so without-graph truly has no graph; wait to suppress bash job notification
+    [[ -n "$MCP_PID" ]] && { kill $MCP_PID 2>/dev/null; wait $MCP_PID 2>/dev/null; } || true
     lsof -ti:$MCP_PORT 2>/dev/null | xargs kill -9 2>/dev/null || true
+    # Write no-questions CLAUDE.md for without-graph run
+    cat > "$WITHOUT_DIR/CLAUDE.md" << 'NOMD'
+# Bench Mode
+Do NOT use AskUserQuestion, EnterPlanMode, or any interactive tool.
+Do NOT ask clarifying questions. Proceed immediately with sensible defaults and build directly.
+NOMD
 
     echo "  ┌── without-graph output ──────────────────────"
     T3=$(date +%s)
