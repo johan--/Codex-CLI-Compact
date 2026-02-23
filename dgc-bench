@@ -80,8 +80,12 @@ _session_tokens() {
 import sys, json
 from pathlib import Path
 project = sys.argv[1]
-encoded = project.replace('/', '-')
+encoded = project.replace('/', '-').replace(' ', '-')
 sessions_dir = Path.home() / '.claude' / 'projects' / encoded
+if not sessions_dir.exists():
+    base = Path.home() / '.claude' / 'projects'
+    match = next((d for d in base.iterdir() if d.name.lower() == encoded.lower()), None)
+    sessions_dir = match if match else sessions_dir
 if not sessions_dir.exists():
     print(0); exit()
 files = sorted(sessions_dir.glob('*.jsonl'), key=lambda f: f.stat().st_mtime)
@@ -286,12 +290,18 @@ import sys, json, datetime
 from pathlib import Path
 
 project, label, bench_log = sys.argv[1], sys.argv[2], sys.argv[3]
-encoded = project.replace('/', '-')
+encoded = project.replace('/', '-').replace(' ', '-')
 sessions_dir = Path.home() / '.claude' / 'projects' / encoded
 if not sessions_dir.exists():
-    print(f"  No session data found for: {project}")
-    print(f"  Expected: {sessions_dir}")
-    exit(1)
+    # Case-insensitive fallback (macOS paths may differ in case)
+    base = Path.home() / '.claude' / 'projects'
+    match = next((d for d in base.iterdir() if d.name.lower() == encoded.lower()), None)
+    if match:
+        sessions_dir = match
+    else:
+        print(f"  No session data found for: {project}")
+        print(f"  Expected: {sessions_dir}")
+        exit(1)
 files = sorted(sessions_dir.glob('*.jsonl'), key=lambda f: f.stat().st_mtime)
 if not files:
     print("  No session files found."); exit(1)
