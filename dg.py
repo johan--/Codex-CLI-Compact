@@ -229,6 +229,13 @@ def score_node(node: dict, terms: list[str], query: str) -> int:
     if role == "docs" and intent in {"edit", "feature", "debug", "refactor"}:
         score -= 3
 
+    # Symbol nodes are more precise than file nodes — boost them so they surface above
+    # their parent files when the query matches a specific function/class/hook.
+    if node.get("kind") == "symbol":
+        score += 3
+        if node.get("confidence") == "high":
+            score += 2
+
     return score
 
 
@@ -337,8 +344,25 @@ def retrieve(graph: dict, query: str, top_files: int, top_edges: int) -> Retriev
         if s > 0:
             node_scored.append((s, node))
     node_scored.sort(key=lambda x: (-x[0], x[1].get("id", "")))
+    # Deduplicate: if a symbol from file F is included, skip the file node F,
+    # and vice-versa. Whatever scores highest wins — file or symbol — but only
+    # one representative per file is allowed in the top results.
     chosen_files = []
-    for s, n in node_scored[:top_files]:
+    seen_file_bases: set[str] = set()
+    for s, n in node_scored:
+        if len(chosen_files) >= top_files:
+            break
+        node_id = str(n.get("id", ""))
+        kind = str(n.get("kind", "file"))
+        if kind == "symbol":
+            base = node_id.split("::")[0] if "::" in node_id else node_id
+            if base in seen_file_bases:
+                continue  # file (or another symbol from it) already chosen
+            seen_file_bases.add(base)
+        else:
+            if node_id in seen_file_bases:
+                continue  # a symbol from this file scored higher — skip the file node
+            seen_file_bases.add(node_id)
         row = dict(n)
         row["_score"] = s
         row["_role"] = node_role(str(row.get("id", "")), str(row.get("ext", "")))

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -646,6 +647,7 @@ def build_server(host: str = "0.0.0.0", port: int = 8080) -> Any:
         else:
             text = tgt.read_text(encoding="utf-8", errors="ignore")
         mode = "full"
+        sym_stale = False
         # If symbol notation matched, extract only the symbol's lines.
         if sym_meta:
             _lines = text.splitlines()
@@ -653,6 +655,11 @@ def build_server(host: str = "0.0.0.0", port: int = 8080) -> Any:
             _end = min(int(sym_meta.get("line_end", len(_lines) - 1)), len(_lines) - 1)
             text = "\n".join(_lines[_start:_end + 1])
             mode = "symbol_excerpt"
+            # Staleness check: compare body hash against current file content.
+            stored_hash = sym_meta.get("body_hash", "")
+            if stored_hash:
+                current_hash = hashlib.md5(text.encode()).hexdigest()[:8]
+                sym_stale = current_hash != stored_hash
         if anchor:
             i = text.lower().find(anchor.lower())
             if i >= 0:
@@ -702,7 +709,11 @@ def build_server(host: str = "0.0.0.0", port: int = 8080) -> Any:
             "last_ts": int(datetime.now(timezone.utc).timestamp()),
         }
         _save_action_graph(g)
-        return {"ok": True, "file": file, "content": text, "mode": mode}
+        resp: dict[str, Any] = {"ok": True, "file": file, "content": text, "mode": mode}
+        if sym_stale:
+            resp["stale"] = True
+            resp["stale_reason"] = "symbol body changed since last graph scan — consider running graph_scan again"
+        return resp
 
     @mcp.tool()
     def graph_neighbors(file: str, limit: int = 30) -> dict[str, Any]:
