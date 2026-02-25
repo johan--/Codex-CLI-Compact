@@ -54,6 +54,7 @@ DG_DATA_DIR = Path(
 LOG_FILE = DG_DATA_DIR / "mcp_tool_calls.jsonl"
 ACTION_GRAPH_FILE = DG_DATA_DIR / "chat_action_graph.json"
 RETRIEVAL_CACHE_FILE = DG_DATA_DIR / "retrieval_cache.json"
+SYMBOL_INDEX_FILE = DG_DATA_DIR / "symbol_index.json"
 HARD_MAX_READ_CHARS = int(os.environ.get("DG_HARD_MAX_READ_CHARS", "4000"))
 TURN_READ_BUDGET_CHARS = int(os.environ.get("DG_TURN_READ_BUDGET_CHARS", "18000"))
 ENFORCE_REUSE_GATE = str(os.environ.get("DG_ENFORCE_REUSE_GATE", "1")).strip() not in {"0", "false", "False"}
@@ -108,6 +109,32 @@ def _local_info_graph() -> dict[str, Any] | None:
         return json.loads(graph_json.read_text(encoding="utf-8"))
     except Exception:
         return None
+
+
+def _build_symbol_index(graph: dict[str, Any]) -> dict[str, Any]:
+    """Build a flat {symbol_id: metadata} dict for O(1) graph_read lookup."""
+    index: dict[str, Any] = {}
+    for node in graph.get("nodes", []):
+        if node.get("kind") == "symbol":
+            node_id = str(node.get("id", ""))
+            if node_id:
+                index[node_id] = {
+                    "line_start": node.get("line_start", 0),
+                    "line_end": node.get("line_end", 0),
+                    "body_hash": node.get("body_hash", ""),
+                    "confidence": node.get("confidence", ""),
+                    "path": node.get("path", ""),
+                }
+    return index
+
+
+def _load_symbol_index() -> dict[str, Any]:
+    if not SYMBOL_INDEX_FILE.exists():
+        return {}
+    try:
+        return json.loads(SYMBOL_INDEX_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
 
 
 def _local_chat_fix(query: str, top_files: int, top_edges: int) -> dict[str, Any] | None:
@@ -322,7 +349,9 @@ def _retrieval_entry_valid(entry: dict[str, Any]) -> bool:
     for rel in files:
         if not isinstance(rel, str) or not rel:
             return False
-        p = (PROJECT_ROOT / rel).resolve()
+        # Symbol IDs (file::symbol) → check mtime of the base file on disk.
+        file_path = rel.split("::")[0] if "::" in rel else rel
+        p = (PROJECT_ROOT / file_path).resolve()
         current = _file_mtime_ns(p)
         if current < 0:
             return False
@@ -337,12 +366,14 @@ def _invalidate_retrieval_cache_for_files(changed_files: list[str]) -> int:
     if not isinstance(entries, dict):
         return 0
     changed = set(changed_files)
+    # Also match symbol IDs whose base file is in the changed set.
+    changed_bases = {f.split("::")[0] if "::" in f else f for f in changed_files}
     kill_keys = []
     for key, ent in entries.items():
         files = ent.get("files", [])
         if not isinstance(files, list):
             continue
-        if any(f in changed for f in files):
+        if any(f in changed or (f.split("::")[0] if "::" in f else f) in changed_bases for f in files):
             kill_keys.append(key)
     for k in kill_keys:
         entries.pop(k, None)
@@ -479,7 +510,9 @@ def build_server(host: str = "0.0.0.0", port: int = 8080) -> Any:
         rel_files = [str(f.get("id", "")) for f in out.get("graph_files", []) if str(f.get("id", ""))]
         mtimes: dict[str, int] = {}
         for rel in rel_files:
-            mtimes[rel] = _file_mtime_ns((PROJECT_ROOT / rel).resolve())
+            # Symbol IDs (file::symbol) → stat the base file on disk.
+            file_path = rel.split("::")[0] if "::" in rel else rel
+            mtimes[rel] = _file_mtime_ns((PROJECT_ROOT / file_path).resolve())
         entries = rcache.get("entries", {})
         if not isinstance(entries, dict):
             entries = {}
@@ -609,21 +642,12 @@ def build_server(host: str = "0.0.0.0", port: int = 8080) -> Any:
             _log_tool("graph_read", payload)
             return {"ok": True, "file": file, "content": preview, "mode": "dedupe_preview", "already_returned": True}
 
-        # Handle file::symbol notation — resolve symbol line range from graph.
+        # Handle file::symbol notation — O(1) lookup via symbol index.
         sym_meta = None
         file_for_fs = file
         if "::" in file:
             file_for_fs, _ = file.split("::", 1)
-            graph_json_path = DG_DATA_DIR / "info_graph.json"
-            if graph_json_path.exists():
-                try:
-                    _gdata = json.loads(graph_json_path.read_text(encoding="utf-8"))
-                    for _node in _gdata.get("nodes", []):
-                        if _node.get("id") == file:
-                            sym_meta = _node
-                            break
-                except Exception:
-                    pass
+            sym_meta = _load_symbol_index().get(file)
 
         tgt = (PROJECT_ROOT / file_for_fs).resolve()
         if PROJECT_ROOT not in tgt.parents and tgt != PROJECT_ROOT:
@@ -978,12 +1002,17 @@ def build_server(host: str = "0.0.0.0", port: int = 8080) -> Any:
         graph_json.parent.mkdir(parents=True, exist_ok=True)
         graph_json.write_text(json.dumps(graph, indent=2), encoding="utf-8")
 
+        # Build and persist symbol index for O(1) graph_read lookups.
+        sym_index = _build_symbol_index(graph)
+        SYMBOL_INDEX_FILE.write_text(json.dumps(sym_index), encoding="utf-8")
+
         # Update module-level root so graph_read / fallback_rg resolve correctly.
         PROJECT_ROOT = root
 
         # ── Reset all project-specific state ─────────────────────────────────
-        # Retrieval cache: stale file scores from old project.
+        # Retrieval cache + symbol index: stale from old project.
         RETRIEVAL_CACHE_FILE.unlink(missing_ok=True)
+        SYMBOL_INDEX_FILE.unlink(missing_ok=True)
 
         # Action graph: file reads/edits belong to the old project.
         _save_action_graph({"nodes": [], "edges": [], "files": {}, "actions": []})
@@ -1036,6 +1065,9 @@ def main() -> int:
         graph_json = DG_DATA_DIR / "info_graph.json"
         graph_json.parent.mkdir(parents=True, exist_ok=True)
         graph_json.write_text(json.dumps(graph, indent=2), encoding="utf-8")
+        # Build and persist symbol index for O(1) graph_read lookups.
+        sym_index = _build_symbol_index(graph)
+        SYMBOL_INDEX_FILE.write_text(json.dumps(sym_index), encoding="utf-8")
         # Invalidate retrieval cache so new graph is used immediately.
         RETRIEVAL_CACHE_FILE.unlink(missing_ok=True)
         return JSONResponse({

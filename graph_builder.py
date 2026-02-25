@@ -513,8 +513,25 @@ def main() -> None:
 
     graph = scan(root)
     out_path.write_text(json.dumps(graph, indent=2), encoding="utf-8")
+
+    # Write flat symbol index alongside info_graph.json for O(1) graph_read lookups.
+    sym_index = {
+        node["id"]: {
+            "line_start": node["line_start"],
+            "line_end": node["line_end"],
+            "body_hash": node["body_hash"],
+            "confidence": node.get("confidence", ""),
+            "path": node["path"],
+        }
+        for node in graph["nodes"]
+        if node.get("kind") == "symbol"
+    }
+    sym_index_path = out_path.parent / "symbol_index.json"
+    sym_index_path.write_text(json.dumps(sym_index), encoding="utf-8")
+
     print(f"Scanned: {graph['file_count']} files, {graph['symbol_count']} symbols, {graph['edge_count']} edges")
     print(f"Wrote: {out_path}")
+    print(f"Symbol index: {sym_index_path} ({len(sym_index)} symbols)")
 
 
 if __name__ == "__main__":
