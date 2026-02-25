@@ -273,6 +273,50 @@ canvas {
   background: #ffffff;
 }
 
+/* ── Live Token Monitor ─────────────────────────────────────────────────── */
+.live-monitor {
+  border-color: #b3ddd3;
+  background: linear-gradient(135deg, #f0faf6 0%, var(--panel) 100%);
+}
+
+.live-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.live-header h2 {
+  margin: 0;
+}
+
+.live-ts {
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.live-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #0e6b56;
+  flex-shrink: 0;
+  transition: box-shadow 0.1s;
+}
+
+.live-dot.pulse {
+  animation: live-pulse 0.7s ease-out forwards;
+}
+
+@keyframes live-pulse {
+  0%   { box-shadow: 0 0 0 0   rgba(14, 107, 86, 0.55); }
+  100% { box-shadow: 0 0 0 9px rgba(14, 107, 86, 0);    }
+}
+
+.savings-stat strong {
+  color: #0e6b56;
+}
+
 @media (max-width: 980px) {
   .grid {
     grid-template-columns: 1fr;

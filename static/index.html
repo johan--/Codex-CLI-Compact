@@ -13,6 +13,36 @@
       <p>Scan project information graph and track token usage from prompt runs.</p>
     </header>
 
+    <section class="card live-monitor">
+      <div class="live-header">
+        <h2>Live Token Monitor</h2>
+        <span class="live-dot" id="live-dot" title="auto-refreshes every 5s"></span>
+        <span class="live-ts muted" id="live-ts">loading…</span>
+      </div>
+      <div class="stats">
+        <div><span>With Graph</span><strong id="lm-with">-</strong></div>
+        <div><span>Without Graph</span><strong id="lm-without">-</strong></div>
+        <div class="savings-stat"><span>Tokens Saved</span><strong id="lm-saved">-</strong></div>
+        <div class="savings-stat"><span>Savings %</span><strong id="lm-pct">-</strong></div>
+        <div><span>Sessions Logged</span><strong id="lm-count">-</strong></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Time (UTC)</th>
+              <th>Project</th>
+              <th>Mode</th>
+              <th>With Graph</th>
+              <th>Without Graph</th>
+              <th>Saved</th>
+            </tr>
+          </thead>
+          <tbody id="lm-table"></tbody>
+        </table>
+      </div>
+    </section>
+
     <section class="grid">
       <article class="card">
         <h2>Information Graph</h2>

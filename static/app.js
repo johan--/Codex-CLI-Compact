@@ -523,6 +523,48 @@ async function logComparison() {
   }
 }
 
+async function refreshBenchLog() {
+  try {
+    const data = await api("/api/bench-log");
+    const now = new Date().toLocaleTimeString();
+
+    document.getElementById("lm-with").textContent = (data.total_with || 0).toLocaleString();
+    document.getElementById("lm-without").textContent = (data.total_without || 0).toLocaleString();
+    document.getElementById("lm-saved").textContent = (data.total_saved || 0).toLocaleString();
+    document.getElementById("lm-pct").textContent = `${data.pct_saved ?? 0}%`;
+    document.getElementById("lm-count").textContent = data.entry_count || 0;
+    document.getElementById("live-ts").textContent = `updated ${now}`;
+
+    const dot = document.getElementById("live-dot");
+    dot.classList.remove("pulse");
+    void dot.offsetWidth;
+    dot.classList.add("pulse");
+
+    const tbody = document.getElementById("lm-table");
+    tbody.innerHTML = "";
+    (data.recent || []).forEach((row) => {
+      const tr = document.createElement("tr");
+      const saved = row.saved ?? null;
+      const savedStr = saved !== null ? saved.toLocaleString() : "-";
+      const savedStyle = saved !== null && saved > 0 ? "color:#0e6b56;font-weight:600" : saved !== null && saved < 0 ? "color:#be5a28" : "";
+      const withVal = typeof row.with === "number" ? row.with.toLocaleString() : (row.tokens != null ? row.tokens.toLocaleString() : "-");
+      const withoutVal = typeof row.without === "number" ? row.without.toLocaleString() : "-";
+      tr.innerHTML = `
+        <td>${(row.ts || "").replace("T", " ").replace("Z", "")}</td>
+        <td title="${row.project || ""}">${(row.project || "unknown").slice(-28)}</td>
+        <td>${row.mode || ""}</td>
+        <td>${withVal}</td>
+        <td>${withoutVal}</td>
+        <td style="${savedStyle}">${savedStr}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch (err) {
+    const el = document.getElementById("live-ts");
+    if (el) el.textContent = `error: ${err.message}`;
+  }
+}
+
 async function init() {
   document.getElementById("scan-btn").addEventListener("click", doScan);
   document.getElementById("refresh-graph-btn").addEventListener("click", refreshGraph);
@@ -536,6 +578,8 @@ async function init() {
   document.getElementById("fix-apply-btn").addEventListener("click", () => runFix(true));
   await refreshGraph();
   await refreshSummary();
+  refreshBenchLog();
+  setInterval(refreshBenchLog, 5000);
 }
 
 function renderGraphTree() {

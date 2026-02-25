@@ -30,6 +30,7 @@ TOKEN_LOG = DATA_DIR / "token_usage.jsonl"
 BENCH_JSON = DATA_DIR / "compare_quality_report.json"
 BENCH_MD = DATA_DIR / "compare_quality_report.md"
 AB_RUNS_DIR = DATA_DIR / "ab_runs"
+BENCH_LOG_PATH = Path.home() / ".dual-graph" / "bench_log.jsonl"
 PROJECT_ROOT = Path(
     os.environ.get(
         "DUAL_GRAPH_PROJECT_ROOT",
@@ -77,6 +78,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if parsed.path == "/api/token-summary":
                 self.serve_token_summary()
+                return
+            if parsed.path == "/api/bench-log":
+                self.serve_bench_log()
                 return
             if parsed.path == "/healthz":
                 self.write_json({"ok": True})
@@ -252,6 +256,85 @@ class Handler(BaseHTTPRequestHandler):
                 "recent": events[-30:],
             }
         )
+
+    def serve_bench_log(self) -> None:
+        entries: list[dict] = []
+        if BENCH_LOG_PATH.exists():
+            for line in BENCH_LOG_PATH.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    entries.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+
+        total_with = 0
+        total_without = 0
+        by_project: dict[str, dict] = {}
+
+        for e in entries:
+            project = str(e.get("project", "unknown"))
+            mode = str(e.get("mode", ""))
+            if project not in by_project:
+                by_project[project] = {"with": 0, "without": 0}
+
+            if mode == "live":
+                tw = int(e.get("tokens_with", 0) or 0)
+                two = int(e.get("tokens_without", 0) or 0)
+                total_with += tw
+                total_without += two
+                by_project[project]["with"] += tw
+                by_project[project]["without"] += two
+            elif mode == "session":
+                label = str(e.get("label", ""))
+                tokens = int(e.get("tokens", 0) or 0)
+                if "with" in label:
+                    total_with += tokens
+                    by_project[project]["with"] += tokens
+                elif "without" in label:
+                    total_without += tokens
+                    by_project[project]["without"] += tokens
+
+        total_saved = total_without - total_with
+        pct_saved = round((total_saved / total_without * 100), 1) if total_without > 0 else 0.0
+
+        recent: list[dict] = []
+        for e in entries[-30:]:
+            mode = str(e.get("mode", ""))
+            proj = str(e.get("project", "")).split("/")[-1]
+            if mode == "live":
+                tw = int(e.get("tokens_with", 0) or 0)
+                two = int(e.get("tokens_without", 0) or 0)
+                recent.append({
+                    "ts": str(e.get("ts", "")),
+                    "project": proj,
+                    "mode": "live",
+                    "with": tw,
+                    "without": two,
+                    "saved": two - tw,
+                })
+            elif mode == "session":
+                recent.append({
+                    "ts": str(e.get("ts", "")),
+                    "project": proj,
+                    "mode": f"session/{e.get('label', '')}",
+                    "tokens": int(e.get("tokens", 0) or 0),
+                    "inp": int(e.get("inp", 0) or 0),
+                    "out": int(e.get("out", 0) or 0),
+                })
+
+        self.write_json({
+            "total_with": total_with,
+            "total_without": total_without,
+            "total_saved": total_saved,
+            "pct_saved": pct_saved,
+            "entry_count": len(entries),
+            "by_project": [
+                {"project": p, "with": v["with"], "without": v["without"], "saved": v["without"] - v["with"]}
+                for p, v in by_project.items()
+            ],
+            "recent": list(reversed(recent)),
+        })
 
     def tokenize_text(self) -> None:
         body = self.read_json_body()
