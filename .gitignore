@@ -1,15 +1,21 @@
-.env
+# Python
 __pycache__/
 *.pyc
 *.pyo
-.venv-mcp/
-data/ab_runs/
-data/action_events.jsonl
-data/chat_action_graph.json
-data/compare_quality_report.*
-data/info_graph.json
-data/mcp_tool_calls.jsonl
-data/project_read_summary.*
-data/retrieval_cache.json
-data/token_usage.jsonl
+venv/
+
+# Data (never commit user data)
+data/
+*.jsonl
+bench_log.jsonl
+comparison/
+
+# Node
+node_modules/
+
+# macOS
 .DS_Store
+
+# Local project graphs (per-project, stays on machine)
+.dual-graph/
+.dual-graph-context/
