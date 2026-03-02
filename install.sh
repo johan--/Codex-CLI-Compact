@@ -34,9 +34,22 @@ LICENSE_KEY="${DG_LICENSE_KEY:-}"
 MACHINE_ID=$("$PYTHON" -c "import uuid; print(uuid.getnode())" 2>/dev/null || echo "unknown")
 PLATFORM="$(uname -s | tr '[:upper:]' '[:lower:]')"
 
+# ── Collect user info (skip if already provided via env vars) ─────────────────
+if [[ -z "${DG_NAME:-}" && -z "${DG_EMAIL:-}" ]]; then
+  echo ""
+  echo "[install] Quick registration (helps us send updates & support)"
+  printf "  Name  (optional): " > /dev/tty
+  read -r DG_NAME < /dev/tty || DG_NAME=""
+  printf "  Email (optional): " > /dev/tty
+  read -r DG_EMAIL < /dev/tty || DG_EMAIL=""
+  echo ""
+fi
+DG_NAME="${DG_NAME:-}"
+DG_EMAIL="${DG_EMAIL:-}"
+
 VALIDATE_RESP=$(curl -sf -X POST "$LICENSE_SERVER/validate" \
   -H "Content-Type: application/json" \
-  -d "{\"key\":\"$LICENSE_KEY\",\"machine_id\":\"$MACHINE_ID\",\"platform\":\"$PLATFORM\",\"tool\":\"install-sh\"}" 2>/dev/null || echo '{"ok":false,"error":"server unreachable"}')
+  -d "{\"key\":\"$LICENSE_KEY\",\"machine_id\":\"$MACHINE_ID\",\"platform\":\"$PLATFORM\",\"tool\":\"install-sh\",\"name\":\"$DG_NAME\",\"email\":\"$DG_EMAIL\"}" 2>/dev/null || echo '{"ok":false,"error":"server unreachable"}')
 
 OK=$(echo "$VALIDATE_RESP" | "$PYTHON" -c "import sys,json; print(json.load(sys.stdin).get('ok','false'))" 2>/dev/null || echo "false")
 
