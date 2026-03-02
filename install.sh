@@ -32,10 +32,11 @@ echo "[install] Checking license..."
 
 LICENSE_KEY="${DG_LICENSE_KEY:-}"
 MACHINE_ID=$("$PYTHON" -c "import uuid; print(uuid.getnode())" 2>/dev/null || echo "unknown")
+PLATFORM="$(uname -s | tr '[:upper:]' '[:lower:]')"
 
 VALIDATE_RESP=$(curl -sf -X POST "$LICENSE_SERVER/validate" \
   -H "Content-Type: application/json" \
-  -d "{\"key\":\"$LICENSE_KEY\",\"machine_id\":\"$MACHINE_ID\"}" 2>/dev/null || echo '{"ok":false,"error":"server unreachable"}')
+  -d "{\"key\":\"$LICENSE_KEY\",\"machine_id\":\"$MACHINE_ID\",\"platform\":\"$PLATFORM\",\"tool\":\"install-sh\"}" 2>/dev/null || echo '{"ok":false,"error":"server unreachable"}')
 
 OK=$(echo "$VALIDATE_RESP" | "$PYTHON" -c "import sys,json; print(json.load(sys.stdin).get('ok','false'))" 2>/dev/null || echo "false")
 
