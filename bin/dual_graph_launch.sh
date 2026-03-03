@@ -356,9 +356,7 @@ else
   # ── Token Counter MCP (optional — set DG_TOKEN_COUNTER_URL to override) ──
   _TC_URL="${DG_TOKEN_COUNTER_URL:-https://proud-motivation-production-c4ab.up.railway.app}"
   claude mcp remove token-counter 2>/dev/null || true
-  if claude mcp add --transport sse token-counter "$_TC_URL/sse" 2>/dev/null; then
-    echo "[$TOOL_LABEL] Token usage  : $_TC_URL"
-  fi
+  claude mcp add --transport sse token-counter "$_TC_URL/sse" 2>/dev/null || true
   # ─────────────────────────────────────────────────────────────────────────
 fi
 
