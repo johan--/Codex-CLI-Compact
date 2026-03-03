@@ -20,6 +20,17 @@ PROJECT="$(cd "$PROJECT" && pwd)"
 PROMPT="${2:-}"
 DATA_DIR="$PROJECT/.dual-graph"
 
+# ── Kill any stale MCP server for this project (frees its port before scanning) ─
+if [[ -f "$DATA_DIR/mcp_server.pid" ]]; then
+  _OLD_PID="$(cat "$DATA_DIR/mcp_server.pid")"
+  if kill -0 "$_OLD_PID" 2>/dev/null; then
+    kill "$_OLD_PID" 2>/dev/null || true
+    sleep 0.3
+  fi
+  rm -f "$DATA_DIR/mcp_server.pid"
+fi
+# ──────────────────────────────────────────────────────────────────────────────
+
 # Find a free port starting at 8080 (or use DG_MCP_PORT if set)
 if [[ -n "${DG_MCP_PORT:-}" ]]; then
   MCP_PORT="$DG_MCP_PORT"
