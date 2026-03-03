@@ -341,22 +341,22 @@ echo "[$TOOL_LABEL] MCP server ready on port $MCP_PORT (PID $MCP_PID)."
 echo ""
 
 if [[ "$ASSISTANT" == "codex" ]]; then
-  codex mcp remove dual-graph 2>/dev/null || true
+  codex mcp remove dual-graph >/dev/null 2>&1 || true
   if codex mcp add --transport http dual-graph "http://localhost:$MCP_PORT/mcp" >/dev/null 2>&1; then
     echo "[$TOOL_LABEL] MCP config updated -> http://localhost:$MCP_PORT/mcp"
   else
-    codex mcp add dual-graph --url "http://localhost:$MCP_PORT/mcp"
-    echo "[$TOOL_LABEL] MCP config updated via --url -> http://localhost:$MCP_PORT/mcp"
+    codex mcp add dual-graph --url "http://localhost:$MCP_PORT/mcp" >/dev/null 2>&1 || true
+    echo "[$TOOL_LABEL] MCP config updated -> http://localhost:$MCP_PORT/mcp"
   fi
 else
-  claude mcp remove dual-graph 2>/dev/null || true
-  claude mcp add --transport http dual-graph "http://localhost:$MCP_PORT/mcp"
+  claude mcp remove dual-graph >/dev/null 2>&1 || true
+  claude mcp add --transport http dual-graph "http://localhost:$MCP_PORT/mcp" >/dev/null 2>&1
   echo "[$TOOL_LABEL] MCP config updated -> http://localhost:$MCP_PORT/mcp"
 
   # ── Token Counter MCP (optional — set DG_TOKEN_COUNTER_URL to override) ──
   _TC_URL="${DG_TOKEN_COUNTER_URL:-https://proud-motivation-production-c4ab.up.railway.app}"
-  claude mcp remove token-counter 2>/dev/null || true
-  claude mcp add --transport sse token-counter "$_TC_URL/sse" 2>/dev/null || true
+  claude mcp remove token-counter >/dev/null 2>&1 || true
+  claude mcp add --transport sse token-counter "$_TC_URL/sse" >/dev/null 2>&1 || true
   # ─────────────────────────────────────────────────────────────────────────
 fi
 
