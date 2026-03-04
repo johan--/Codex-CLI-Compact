@@ -347,7 +347,13 @@ if [[ "$ASSISTANT" == "claude" ]]; then
   cat > "$DATA_DIR/prime.sh" << PRIMEEOF
 #!/usr/bin/env bash
 PORT=\$(cat "$DATA_DIR/mcp_port" 2>/dev/null || echo $MCP_PORT)
-curl -sf "http://localhost:\$PORT/prime" 2>/dev/null || true
+OUT=\$(curl -sf "http://localhost:\$PORT/prime" 2>/dev/null || true)
+if [[ -n "\$OUT" ]]; then
+  echo "\$OUT"
+  echo "[dual-graph] Context loaded (port \$PORT)" >&2
+else
+  echo "[dual-graph] MCP server not reachable on port \$PORT — run dgc to restart" >&2
+fi
 PRIMEEOF
   chmod +x "$DATA_DIR/prime.sh"
 
