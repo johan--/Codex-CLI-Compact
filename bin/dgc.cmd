@@ -35,7 +35,7 @@ set /p REMOTE_VER=<"%TEMP%\dg_remote_ver.txt"
 if defined REMOTE_VER (
   if not "%REMOTE_VER%"=="" (
     if not "%REMOTE_VER%"=="%LOCAL_VER%" (
-      echo [%TOOL%] Update available (%LOCAL_VER% ^-> %REMOTE_VER%) -- updating...
+      echo [%TOOL%] Update available: %LOCAL_VER% -^> %REMOTE_VER% ... updating
       powershell -NoProfile -Command "Invoke-WebRequest '%R2%/mcp_graph_server.py' -OutFile '%DG%\mcp_graph_server.py' -UseBasicParsing"
       powershell -NoProfile -Command "Invoke-WebRequest '%R2%/graph_builder.py' -OutFile '%DG%\graph_builder.py' -UseBasicParsing"
       powershell -NoProfile -Command "Invoke-WebRequest '%R2%/dual_graph_launch.sh' -OutFile '%DG%\dual_graph_launch.sh' -UseBasicParsing"
