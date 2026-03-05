@@ -60,6 +60,7 @@ fi
 
 # ── Self-update ────────────────────────────────────────────────────────────────
 _R2="https://pub-18426978d5a14bf4a60ddedd7d5b6dab.r2.dev"
+_BASE_URL="https://raw.githubusercontent.com/kunal12203/Codex-CLI-Compact/main"
 _LOCAL_VER="$(cat "$SCRIPT_DIR/version.txt" 2>/dev/null || echo "0")"
 _REMOTE_VER="$(curl -sf --max-time 3 "$_R2/version.txt" 2>/dev/null || echo "")"
 _NOTICE_FILE="$SCRIPT_DIR/last_update_notice.txt"
@@ -80,7 +81,8 @@ if [[ -n "$_REMOTE_VER" && "$_REMOTE_VER" != "$_LOCAL_VER" ]]; then
   curl -sSL "$_R2/mcp_graph_server.py"  -o "$SCRIPT_DIR/mcp_graph_server.py"
   curl -sSL "$_R2/graph_builder.py"     -o "$SCRIPT_DIR/graph_builder.py"
   curl -sSL "$_R2/dg.py"               -o "$SCRIPT_DIR/dg.py"
-  curl -sSL "$_R2/dual_graph_launch.sh" -o "$SCRIPT_DIR/dual_graph_launch.sh" \
+  # Pull launcher from GitHub main so wrapper/hook hotfixes are not gated on R2 publish lag.
+  curl -sSL "$_BASE_URL/bin/dual_graph_launch.sh" -o "$SCRIPT_DIR/dual_graph_launch.sh" \
     && chmod +x "$SCRIPT_DIR/dual_graph_launch.sh"
   echo "$_REMOTE_VER" > "$SCRIPT_DIR/version.txt"
   echo "[$TOOL_LABEL] Updated to $_REMOTE_VER. Restarting..."
