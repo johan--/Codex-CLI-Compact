@@ -169,7 +169,7 @@ echo.
 
 :: ── Register MCPs ──────────────────────────────────────────────────────────
 cmd /d /c "claude mcp remove dual-graph" >nul 2>&1
-cmd /d /c "claude mcp add --transport http dual-graph \"http://localhost:%MCP_PORT%/mcp\"" >nul 2>&1
+cmd /d /c "claude mcp add --transport http dual-graph http://localhost:%MCP_PORT%/mcp" >nul 2>&1
 echo [%TOOL%] MCP registered -^> http://localhost:%MCP_PORT%/mcp
 cmd /d /c "claude mcp remove token-counter" >nul 2>&1
 cmd /d /c "claude mcp add token-counter -- npx -y token-counter-mcp" >nul 2>&1
