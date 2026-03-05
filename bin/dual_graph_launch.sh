@@ -363,7 +363,7 @@ if [[ "$ASSISTANT" == "claude" ]]; then
   cat > "$DATA_DIR/prime.sh" << PRIMEEOF
 #!/usr/bin/env bash
 PORT=\$(cat "$DATA_DIR/mcp_port" 2>/dev/null || echo $MCP_PORT)
-OUT=\$(curl -sf "http://localhost:\$PORT/prime" 2>/dev/null || true)
+OUT=\$(curl -sf --max-time 2 "http://localhost:\$PORT/prime" 2>/dev/null || true)
 if [[ -n "\$OUT" ]]; then
   echo "\$OUT"
 fi
@@ -379,7 +379,7 @@ PRIMEEOF
 import json, sys
 settings_file = sys.argv[1]
 prime_cmd = sys.argv[2]
-hook_cmd = f'bash -lc "{prime_cmd}"'
+hook_cmd = f'/bin/bash "{prime_cmd}"'
 payload = {
     "hooks": {
         "SessionStart": [
