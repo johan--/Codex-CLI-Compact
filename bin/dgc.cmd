@@ -45,13 +45,21 @@ if defined REMOTE_VER (
   )
 )
 
-:: ── Kill stale MCP server ──────────────────────────────────────────────────
+:: ── Kill stale MCP server (by saved PID tree + by port) ────────────────────
 if exist "%DATA_DIR%\mcp_server.pid" (
     set /p OLD_PID=<"%DATA_DIR%\mcp_server.pid"
-    taskkill /PID !OLD_PID! /F >nul 2>&1
+    taskkill /PID !OLD_PID! /F /T >nul 2>&1
     del "%DATA_DIR%\mcp_server.pid" >nul 2>&1
-    timeout /t 1 /nobreak >nul
 )
+if exist "%DATA_DIR%\mcp_port" (
+    set /p OLD_PORT=<"%DATA_DIR%\mcp_port"
+    for /f "tokens=5" %%q in ('netstat -ano 2^>nul ^| findstr /C:":%OLD_PORT% " ^| findstr "LISTENING"') do (
+        taskkill /PID %%q /F /T >nul 2>&1
+    )
+)
+del "%DATA_DIR%\mcp_server.log" >nul 2>&1
+del "%DATA_DIR%\mcp_port" >nul 2>&1
+timeout /t 2 /nobreak >nul
 
 :: ── Find a free port (8080-8099) ───────────────────────────────────────────
 if defined DG_MCP_PORT (
@@ -60,7 +68,7 @@ if defined DG_MCP_PORT (
 )
 set "MCP_PORT=8080"
 :find_port
-netstat -an 2>nul | findstr /C:":%MCP_PORT% " | findstr "LISTENING" >nul 2>&1
+netstat -ano 2>nul | findstr /C:":%MCP_PORT% " | findstr "LISTENING" >nul 2>&1
 if %errorlevel%==0 (
     set /a MCP_PORT+=1
     if !MCP_PORT! gtr 8099 (
@@ -158,13 +166,12 @@ echo [%TOOL%] Scanning project...
 echo [%TOOL%] Scan complete.
 echo.
 
-:: ── Start MCP server in background ────────────────────────────────────────
-echo [%TOOL%] Port    : %MCP_PORT%
-echo.
+:: ── Start MCP server in background ──────────────────────────────���─────────
+echo [%TOOL%] Starting MCP server on port %MCP_PORT%...
 set "LOG=%DATA_DIR%\mcp_server.log"
-start /b "" cmd /c "set DG_DATA_DIR=%DATA_DIR%& set DUAL_GRAPH_PROJECT_ROOT=%PROJECT%& set DG_BASE_URL=http://localhost:%MCP_PORT%& set PORT=%MCP_PORT%& "%PYTHON%" "%DG%\mcp_graph_server.py" >> "%LOG%" 2>&1"
+start /b "" cmd /c "set DG_DATA_DIR=%DATA_DIR%& set DUAL_GRAPH_PROJECT_ROOT=%PROJECT%& set DG_BASE_URL=http://localhost:%MCP_PORT%& set PORT=%MCP_PORT%& "%PYTHON%" "%DG%\mcp_graph_server.py" > "%LOG%" 2>&1"
 
-:: Wait and capture PID via port
+:: Wait for server to be ready (up to 20s)
 set /a TRIES=0
 :wait_loop
 set /a TRIES+=1
@@ -177,6 +184,13 @@ if %errorlevel% neq 0 (
     timeout /t 1 /nobreak >nul
     goto :wait_loop
 )
+
+:: Save PID of the process listening on our port (for cleanup on next run)
+for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr /C:":%MCP_PORT% " ^| findstr "LISTENING"') do (
+    echo %%p> "%DATA_DIR%\mcp_server.pid"
+    goto :pid_saved
+)
+:pid_saved
 
 :: Save port for hooks
 echo %MCP_PORT%> "%DATA_DIR%\mcp_port"
@@ -191,7 +205,7 @@ echo [%TOOL%] MCP config updated -^> http://localhost:%MCP_PORT%/mcp
 :: ── Register token-counter MCP via npx ────────────────────────────────────
 claude mcp remove token-counter >nul 2>&1
 claude mcp add token-counter -- npx -y token-counter-mcp >nul 2>&1
-echo [%TOOL%] Token counter -^> http://localhost:8899 (npx token-counter-mcp)
+echo [%TOOL%] Token counter -^> npx token-counter-mcp
 
 :: ── Context hooks (SessionStart + PreCompact) ─────────────────────────────
 set "PRIME_PS1=%DATA_DIR%\prime.ps1"
@@ -223,8 +237,34 @@ if not exist "%SETTINGS_DIR%" mkdir "%SETTINGS_DIR%"
 ) > "%SETTINGS_FILE%"
 echo [%TOOL%] Context hooks ready ^(SessionStart + PreCompact^)
 
+:: ── Launch Claude (via sub-batch so Ctrl+C cleanup still runs) ────────────
 echo.
 echo [%TOOL%] Starting claude...
 echo.
-cd /d "%PROJECT%"
-claude
+set "RUN_BAT=%TEMP%\dgc_run_%RANDOM%.bat"
+(
+    echo @echo off
+    echo cd /d "%PROJECT%"
+    echo claude
+) > "%RUN_BAT%"
+call "%RUN_BAT%"
+del "%RUN_BAT%" >nul 2>&1
+
+:: ── Cleanup after claude exits (runs even after Ctrl+C -> Y) ──────────────
+echo.
+echo [%TOOL%] Cleaning up...
+claude mcp remove dual-graph >nul 2>&1
+claude mcp remove token-counter >nul 2>&1
+if exist "%DATA_DIR%\mcp_server.pid" (
+    set /p KILL_PID=<"%DATA_DIR%\mcp_server.pid"
+    taskkill /PID !KILL_PID! /F /T >nul 2>&1
+    del "%DATA_DIR%\mcp_server.pid" >nul 2>&1
+)
+if exist "%DATA_DIR%\mcp_port" (
+    set /p KILL_PORT=<"%DATA_DIR%\mcp_port"
+    for /f "tokens=5" %%q in ('netstat -ano 2^>nul ^| findstr /C:":%KILL_PORT% " ^| findstr "LISTENING"') do (
+        taskkill /PID %%q /F /T >nul 2>&1
+    )
+)
+del "%DATA_DIR%\mcp_port" >nul 2>&1
+echo [%TOOL%] Done.
