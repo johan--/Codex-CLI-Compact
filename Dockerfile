@@ -4,16 +4,21 @@ WORKDIR /app
 
 # ripgrep for fallback grep, git for cloning the target project repo.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ripgrep git \
+    && apt-get install -y --no-install-recommends ripgrep git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python deps before copying source so this layer is cached.
+ENV PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
+# Install Python deps first for better layer reuse.
 COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+RUN pip install -r /app/requirements.txt
 
-COPY . /app/dual-graph-dashboard
+# Copy only files needed at runtime to keep image small and pulls fast.
+COPY dashboard /app/dual-graph-dashboard/dashboard
+COPY bin /app/dual-graph-dashboard/bin
 
-ENV PYTHONUNBUFFERED=1
 # Dashboard API runs internally on 8787; MCP SSE uses Railway's PORT.
 ENV DG_BASE_URL=http://127.0.0.1:8787
 

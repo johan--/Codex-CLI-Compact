@@ -54,4 +54,4 @@ export DG_BASE_URL="http://127.0.0.1:$INTERNAL_PORT"
 
 # ── Start MCP server (SSE, on Railway's public PORT) ─────────────────────────
 echo "[start] starting MCP SSE server on PORT=${PORT:-8080}"
-exec python3 "$APP_DIR/core/mcp_graph_server.py"
+exec python3 "$APP_DIR/bin/mcp_graph_server.py"

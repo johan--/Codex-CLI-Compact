@@ -16,11 +16,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
-# core/ lives one level up from dashboard/
+# bin/ lives one level up from dashboard/
 import sys as _sys
-_CORE_DIR = Path(__file__).resolve().parent.parent / "core"
-if str(_CORE_DIR) not in _sys.path:
-    _sys.path.insert(0, str(_CORE_DIR))
+_BIN_DIR = Path(__file__).resolve().parent.parent / "bin"
+if str(_BIN_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_BIN_DIR))
 
 from graph_builder import scan
 from dg import retrieve
