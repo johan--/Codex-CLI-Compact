@@ -372,14 +372,18 @@ PRIMEEOF
   chmod +x "$DATA_DIR/prime.sh"
 
   mkdir -p "$PROJECT/.claude"
+  PRIME_CMD="$DATA_DIR/prime.sh"
+  # Claude hook command is shell-executed; quote absolute path so spaces are safe.
+  PRIME_CMD_ESCAPED="${PRIME_CMD//\'/\'\"\'\"\'}"
+  HOOK_CMD="bash -lc '\"${PRIME_CMD_ESCAPED}\"'"
   cat > "$PROJECT/.claude/settings.local.json" << SETTINGSEOF
 {
   "hooks": {
     "SessionStart": [
-      {"matcher": "", "hooks": [{"type": "command", "command": "$DATA_DIR/prime.sh"}]}
+      {"matcher": "", "hooks": [{"type": "command", "command": "$HOOK_CMD"}]}
     ],
     "PreCompact": [
-      {"matcher": "", "hooks": [{"type": "command", "command": "$DATA_DIR/prime.sh"}]}
+      {"matcher": "", "hooks": [{"type": "command", "command": "$HOOK_CMD"}]}
     ]
   }
 }
