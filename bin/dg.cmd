@@ -74,8 +74,8 @@ echo [%TOOL%] MCP server ready on port %MCP_PORT%.
 echo.
 
 :: ── Register MCP with Codex CLI ────────────────────────────────────────────
-codex mcp remove dual-graph >nul 2>&1
-codex mcp add --transport http dual-graph "http://localhost:%MCP_PORT%/mcp" >nul 2>&1 || codex mcp add dual-graph --url "http://localhost:%MCP_PORT%/mcp"
+call codex mcp remove dual-graph >nul 2>&1
+call codex mcp add --transport http dual-graph "http://localhost:%MCP_PORT%/mcp" >nul 2>&1 || call codex mcp add dual-graph --url "http://localhost:%MCP_PORT%/mcp"
 echo [%TOOL%] MCP registered -> http://localhost:%MCP_PORT%/mcp
 echo.
 
@@ -83,4 +83,4 @@ echo.
 echo [%TOOL%] Starting Codex CLI...
 echo.
 cd /d "%PROJECT%"
-codex
+call codex
