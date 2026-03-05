@@ -9,6 +9,21 @@ set "PYTHON=%DG%\venv\Scripts\python.exe"
 set "TOOL=dgc"
 set "POLICY_MARKER=dgc-policy-v9"
 set "R2=https://pub-18426978d5a14bf4a60ddedd7d5b6dab.r2.dev"
+set "BASE_URL=https://raw.githubusercontent.com/kunal12203/Codex-CLI-Compact/main"
+
+:: ── Bootstrap latest launcher wrapper (best effort) ─────────────────────────
+if not defined DG_BOOTSTRAP_DONE (
+    set "DG_BOOTSTRAP_DONE=1"
+    set "BOOTSTRAP_CMD=%TEMP%\dgc_bootstrap_%RANDOM%.cmd"
+    powershell -NoProfile -Command ^
+      "try { Invoke-WebRequest '%BASE_URL%/bin/dgc.cmd' -OutFile '%BOOTSTRAP_CMD%' -UseBasicParsing -TimeoutSec 3 } catch {}"
+    if exist "%BOOTSTRAP_CMD%" (
+        call "%BOOTSTRAP_CMD%" %*
+        set "RC=%ERRORLEVEL%"
+        del "%BOOTSTRAP_CMD%" >nul 2>&1
+        exit /b %RC%
+    )
+)
 
 if "%~1"=="" (
     set "PROJECT=%CD%"
