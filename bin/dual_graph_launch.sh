@@ -373,21 +373,26 @@ PRIMEEOF
 
   mkdir -p "$PROJECT/.claude"
   PRIME_CMD="$DATA_DIR/prime.sh"
-  # Claude hook command is shell-executed; quote absolute path so spaces are safe.
-  PRIME_CMD_ESCAPED="${PRIME_CMD//\'/\'\"\'\"\'}"
-  HOOK_CMD="bash -lc '\"${PRIME_CMD_ESCAPED}\"'"
-  cat > "$PROJECT/.claude/settings.local.json" << SETTINGSEOF
-{
-  "hooks": {
-    "SessionStart": [
-      {"matcher": "", "hooks": [{"type": "command", "command": "$HOOK_CMD"}]}
-    ],
-    "PreCompact": [
-      {"matcher": "", "hooks": [{"type": "command", "command": "$HOOK_CMD"}]}
-    ]
-  }
+  # Write JSON via Python to avoid quoting/escaping issues in paths with spaces.
+  "$PYTHON" - "$PROJECT/.claude/settings.local.json" "$PRIME_CMD" <<'PY'
+import json, sys
+settings_file = sys.argv[1]
+prime_cmd = sys.argv[2]
+hook_cmd = f'bash -lc "{prime_cmd}"'
+payload = {
+    "hooks": {
+        "SessionStart": [
+            {"matcher": "", "hooks": [{"type": "command", "command": hook_cmd}]}
+        ],
+        "PreCompact": [
+            {"matcher": "", "hooks": [{"type": "command", "command": hook_cmd}]}
+        ],
+    }
 }
-SETTINGSEOF
+with open(settings_file, "w", encoding="utf-8") as f:
+    json.dump(payload, f, indent=2)
+    f.write("\n")
+PY
   echo "[$TOOL_LABEL] Context hooks ready (SessionStart + PreCompact)"
 fi
 # ──────────────────────────────────────────────────────────────────────────────
