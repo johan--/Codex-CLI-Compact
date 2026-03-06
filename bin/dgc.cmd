@@ -127,14 +127,25 @@ if "%NEED_WRITE%"=="1" (
         echo 4. Read recommended_files using graph_read.
         echo 5. Obey confidence caps: high=stop, medium/low=limited fallback_rg then stop.
         echo.
-        echo ## Session Context
-        echo - CONTEXT.md is auto-injected at session start if it exists in the project root.
-        echo - At end of session, update CONTEXT.md: current task, key decisions, next steps.
-        echo - Keep it under 400 tokens. Do NOT dump full history.
+        echo ## Token Usage
+        echo A token-counter MCP is available. Use count_tokens before reading large files.
+        echo Use get_session_stats to show running cost.
         echo.
         echo ## Rules
         echo - Do NOT use rg/grep/bash exploration before graph_continue.
+        echo - Do NOT do broad/recursive exploration at any confidence level.
+        echo - Do NOT call graph_retrieve more than once per turn.
         echo - After edits, call graph_register_edit with changed files.
+        echo.
+        echo ## Context Store
+        echo Append to .dual-graph\context-store.json when you make a decision, task, next step, fact, or blocker.
+        echo Format: {"type":"decision^|task^|next^|fact^|blocker","content":"max 15 words","tags":[],"files":[],"date":"YYYY-MM-DD"}
+        echo To append: Read file, add entry to array, Write back, call graph_register_edit on .dual-graph/context-store.json.
+        echo Only log things worth remembering across sessions. Log immediately, not at session end.
+        echo.
+        echo ## Session End
+        echo When user signals done (bye/done/wrap up), update CONTEXT.md: Current Task, Key Decisions (max 3^), Next Steps (max 3^).
+        echo Keep CONTEXT.md under 20 lines. Only what is needed to resume next session.
     ) > "%DOC_FILE%"
     echo [%TOOL%] CLAUDE.md written.
 ) else (
@@ -143,6 +154,7 @@ if "%NEED_WRITE%"=="1" (
 
 :: ── Scan project ───────────────────────────────────────────────────────────
 if not exist "%DATA_DIR%" mkdir "%DATA_DIR%"
+if not exist "%DATA_DIR%\context-store.json" echo []> "%DATA_DIR%\context-store.json"
 echo [%TOOL%] Scanning project...
 "%PYTHON%" "%DG%\graph_builder.py" --root "%PROJECT%" --out "%DATA_DIR%\info_graph.json"
 echo [%TOOL%] Scan complete.
@@ -205,6 +217,14 @@ set "SETTINGS_FILE=%SETTINGS_DIR%\settings.local.json"
     echo }
     echo $ctxFile = '%PROJECT%\CONTEXT.md'
     echo if ^(Test-Path $ctxFile^) { Write-Output ""; Write-Output "=== CONTEXT.md ==="; Get-Content $ctxFile -Raw; Write-Output "=== end CONTEXT.md ===" }
+    echo $storeFile = '%DATA_DIR%\context-store.json'
+    echo if ^(Test-Path $storeFile^) {
+    echo     $cutoff = ^(Get-Date^).AddDays^(-7^).ToString^('yyyy-MM-dd'^)
+    echo     try {
+    echo         $entries = ^(Get-Content $storeFile -Raw ^| ConvertFrom-Json^) ^| Where-Object { $_.date -ge $cutoff } ^| Select-Object -First 15
+    echo         if ^($entries^) { Write-Output ""; Write-Output "=== Stored Context ==="; $entries ^| ForEach-Object { Write-Output ^("[" + $_.type + "] " + $_.content^) }; Write-Output "=== end Stored Context ===" }
+    echo     } catch {}
+    echo }
 ) > "%PRIME_PS1%"
 
 if not exist "%SETTINGS_DIR%" mkdir "%SETTINGS_DIR%"
