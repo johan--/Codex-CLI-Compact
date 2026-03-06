@@ -134,41 +134,12 @@ if exist "%DOC_FILE%" (
 
 if "%NEED_WRITE%"=="1" (
     echo [%TOOL%] Writing CLAUDE.md policy...
-    (
-        echo ^<!-- %POLICY_MARKER% --^>
-        echo # Dual-Graph Context Policy
-        echo.
-        echo This project uses a local dual-graph MCP server for efficient context retrieval.
-        echo.
-        echo ## MANDATORY: Always follow this order
-        echo.
-        echo 1. Call graph_continue first - before any file exploration, grep, or code reading.
-        echo 2. If needs_project=true: call graph_scan with the project directory.
-        echo 3. If skip=true: project has fewer than 5 files. Read only specific files asked about.
-        echo 4. Read recommended_files using graph_read.
-        echo 5. Obey confidence caps: high=stop, medium/low=limited fallback_rg then stop.
-        echo.
-        echo ## Token Usage
-        echo A token-counter MCP is available. Use count_tokens before reading large files.
-        echo Use get_session_stats to show running cost.
-        echo.
-        echo ## Rules
-        echo - Do NOT use rg/grep/bash exploration before graph_continue.
-        echo - Do NOT do broad/recursive exploration at any confidence level.
-        echo - Do NOT call graph_retrieve more than once per turn.
-        echo - After edits, call graph_register_edit with changed files.
-        echo.
-        echo ## Context Store
-        echo Append to .dual-graph\context-store.json when you make a decision, task, next step, fact, or blocker.
-        echo Format: {"type":"decision^|task^|next^|fact^|blocker","content":"max 15 words","tags":[],"files":[],"date":"YYYY-MM-DD"}
-        echo To append: Read file, add entry to array, Write back, call graph_register_edit on .dual-graph/context-store.json.
-        echo Only log things worth remembering across sessions. Log immediately, not at session end.
-        echo.
-        echo ## Session End
-        echo When user signals done ^(bye/done/wrap up^), update CONTEXT.md: Current Task, Key Decisions ^(max 3^), Next Steps ^(max 3^).
-        echo Keep CONTEXT.md under 20 lines. Only what is needed to resume next session.
-    ) > "%DOC_FILE%"
-    echo [%TOOL%] CLAUDE.md written.
+    powershell -NoProfile -Command "try { (Invoke-WebRequest '%R2%/CLAUDE.md.template' -UseBasicParsing).Content | Set-Content -LiteralPath '%DOC_FILE%' -Encoding UTF8; exit 0 } catch { exit 1 }" >nul 2>&1
+    if errorlevel 1 (
+        echo [%TOOL%] Warning: could not fetch CLAUDE.md template. Check your connection.
+    ) else (
+        echo [%TOOL%] CLAUDE.md written.
+    )
 ) else (
     echo [%TOOL%] CLAUDE.md already up to date, skipping.
 )
