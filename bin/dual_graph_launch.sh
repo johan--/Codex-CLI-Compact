@@ -525,7 +525,7 @@ if [[ ! -f "$_FEEDBACK_DONE" ]] && [[ -f "$_INSTALL_DATE_FILE" ]] && [[ -t 0 ]];
     printf "  Anything you'd improve? (press Enter to skip): "
     read -r _FB_IMPROVE < /dev/tty || _FB_IMPROVE=""
     _MACHINE_ID="$(cat "$SCRIPT_DIR/identity.json" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('machine_id','unknown'))" 2>/dev/null || echo "unknown")"
-    curl -sf -X POST "https://dual-graph-license-production.up.railway.app/feedback" \
+    curl -sf -X POST "https://script.google.com/macros/s/AKfycbzsOnvAiDTdhDaW73ErztJztPqT25WOCFn29VzrRYZRhBUIwHRu677DoATctAEiq6dp4Q/exec" \
       -H "Content-Type: application/json" \
       -d "{\"rating\":\"$_FB_RATING\",\"improve\":\"$_FB_IMPROVE\",\"machine_id\":\"$_MACHINE_ID\"}" \
       >/dev/null 2>&1 || true
