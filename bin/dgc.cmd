@@ -249,6 +249,27 @@ powershell -NoProfile -Command ^
   "& { $prime = 'powershell -NoProfile -File ""%PRIME_PS1%""'; $stop = 'powershell -NoProfile -File ""%STOP_PS1%""'; $obj = @{ hooks = @{ SessionStart = @(@{ matcher = ''; hooks = @(@{ type = 'command'; command = $prime }) }); PreCompact = @(@{ matcher = ''; hooks = @(@{ type = 'command'; command = $prime }) }); Stop = @(@{ matcher = ''; hooks = @(@{ type = 'command'; command = $stop }) }) } }; $obj | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath '%SETTINGS_FILE%' -Encoding UTF8 }"
 echo [%TOOL%] Context hooks ready ^(SessionStart + PreCompact + Stop^)
 
+:: ── One-time feedback form ─────────────────────────────────────────────────
+if not exist "%DG%\feedback_done" (
+    if exist "%DG%\install_date.txt" (
+        set /p INSTALL_DATE=<"%DG%\install_date.txt"
+        powershell -NoProfile -Command "if ((Get-Date -Format 'yyyy-MM-dd') -gt '%INSTALL_DATE%') { exit 0 } else { exit 1 }" >nul 2>&1
+        if not errorlevel 1 (
+            echo ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            echo   One quick question before we start ^(asked once only^)
+            echo ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            set /p FB_RATING="  How useful has Graperoot been so far? (1-5): "
+            set /p FB_IMPROVE="  Anything you'd improve? (press Enter to skip): "
+            powershell -NoProfile -Command ^
+              "try { Invoke-RestMethod -Method Post -Uri 'https://script.google.com/macros/s/AKfycbzsOnvAiDTdhDaW73ErztJztPqT25WOCFn29VzrRYZRhBUIwHRu677DoATctAEiq6dp4Q/exec' -ContentType 'application/json' -Body ('{\"rating\":\"!FB_RATING!\",\"improve\":\"!FB_IMPROVE!\",\"machine_id\":\"%COMPUTERNAME%\"}') -EA 0 | Out-Null } catch {}" >nul 2>&1
+            echo. > "%DG%\feedback_done"
+            echo   Thanks^! You won't see this again.
+            echo ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            echo.
+        )
+    )
+)
+
 :: ── Launch Claude (sub-batch so cleanup runs after Ctrl+C) ────────────────
 echo.
 echo [%TOOL%] Starting claude...

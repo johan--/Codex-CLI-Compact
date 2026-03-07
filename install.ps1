@@ -47,6 +47,11 @@ try {
     $identity | ConvertTo-Json -Compress | Set-Content -Path "$INSTALL_DIR\identity.json" -Encoding UTF8
 } catch { }  # never block install
 
+# Save install date for one-time feedback prompt
+try {
+    (Get-Date -Format "yyyy-MM-dd") | Set-Content -Path "$INSTALL_DIR\install_date.txt" -Encoding UTF8
+} catch { }
+
 # ── Download core engine ──────────────────────────────────────────────────────
 Write-Host "[install] Downloading core engine..."
 Invoke-WebRequest "$R2/mcp_graph_server.py"  -OutFile "$INSTALL_DIR\mcp_graph_server.py"  -UseBasicParsing
