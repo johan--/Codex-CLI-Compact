@@ -4,16 +4,16 @@
 
 setlocal enabledelayedexpansion
 
+set "DG=%USERPROFILE%\.dual-graph"
+
 :: ── Apply pending self-update (downloaded by previous run) ────────────────
-if exist "%~f0.new" (
-    move /y "%~f0.new" "%~f0" >nul 2>&1
+if exist "%DG%\dg.cmd.new" (
+    move /y "%DG%\dg.cmd.new" "%~f0" >nul 2>&1
     if not errorlevel 1 (
         call "%~f0" %*
         exit /b
     )
 )
-
-set "DG=%USERPROFILE%\.dual-graph"
 set "PYTHON=%DG%\venv\Scripts\python.exe"
 set "TOOL=dg"
 set "R2=https://pub-18426978d5a14bf4a60ddedd7d5b6dab.r2.dev"

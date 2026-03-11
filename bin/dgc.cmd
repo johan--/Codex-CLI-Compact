@@ -4,16 +4,16 @@
 
 setlocal enabledelayedexpansion
 
+set "DG=%USERPROFILE%\.dual-graph"
+
 :: ── Apply pending self-update (downloaded by previous run) ────────────────
-if exist "%~f0.new" (
-    move /y "%~f0.new" "%~f0" >nul 2>&1
+if exist "%DG%\dgc.cmd.new" (
+    move /y "%DG%\dgc.cmd.new" "%~f0" >nul 2>&1
     if not errorlevel 1 (
         call "%~f0" %*
         exit /b
     )
 )
-
-set "DG=%USERPROFILE%\.dual-graph"
 set "PYTHON=%DG%\venv\Scripts\python.exe"
 set "TOOL=dgc"
 set "POLICY_MARKER=dgc-policy-v10"
