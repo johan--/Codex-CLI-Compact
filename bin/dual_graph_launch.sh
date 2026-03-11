@@ -542,6 +542,9 @@ fi
 # ──────────────────────────────────────────────────────────────────────────────
 
 echo ""
+echo "[$TOOL_LABEL] 💬 Questions, bugs, or feedback? Join the community:"
+echo "[$TOOL_LABEL]    https://discord.gg/rxgVVgCh"
+echo ""
 echo "[$TOOL_LABEL] Starting $ASSISTANT..."
 echo ""
 
