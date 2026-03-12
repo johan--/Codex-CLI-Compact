@@ -46,7 +46,15 @@ function Send-CliError([string]$Step, [string]$Message) {
 }
 
 function Get-Text([string]$Uri) {
-    (Invoke-WebRequest $Uri -UseBasicParsing -TimeoutSec 5).Content.Trim()
+    $response = Invoke-WebRequest $Uri -UseBasicParsing -TimeoutSec 5
+    $content = $response.Content
+    if ($content -is [byte[]]) {
+        return ([System.Text.Encoding]::UTF8.GetString($content)).Trim()
+    }
+    if ($content -is [System.Array]) {
+        return ([System.Text.Encoding]::UTF8.GetString([byte[]]$content)).Trim()
+    }
+    return ([string]$content).Trim()
 }
 
 function Download-File([string]$Primary, [string]$Fallback, [string]$OutFile) {
