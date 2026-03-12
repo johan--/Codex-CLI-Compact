@@ -241,10 +241,12 @@ try {
     Write-Host "[$Tool] MCP server ready on port $port."
     Write-Host ""
 
+    # Run Claude MCP commands through cmd.exe so a harmless "not found" remove
+    # does not get promoted into a terminating PowerShell error on newer shells.
     cmd /d /c "claude mcp remove dual-graph" > $null 2>&1
-    & claude mcp add --transport http dual-graph "http://localhost:$port/mcp" > $null 2>&1
+    cmd /d /c "claude mcp add --transport http dual-graph http://localhost:$port/mcp" > $null 2>&1
     if ($LASTEXITCODE -ne 0) {
-        & claude mcp add dual-graph --url "http://localhost:$port/mcp" > $null 2>&1
+        cmd /d /c "claude mcp add dual-graph --url http://localhost:$port/mcp" > $null 2>&1
     }
     if ($LASTEXITCODE -ne 0) {
         Send-CliError "Registering MCP" "MCP registration failed in dgc.ps1"
@@ -261,7 +263,7 @@ try {
 
     cmd /d /c "claude mcp remove token-counter --scope user" > $null 2>&1
     cmd /d /c "claude mcp remove token-counter" > $null 2>&1
-    & claude mcp add --scope user token-counter -- npx -y token-counter-mcp > $null 2>&1
+    cmd /d /c "claude mcp add --scope user token-counter -- npx -y token-counter-mcp" > $null 2>&1
     Write-Host "[$Tool] Token counter registered (global)"
 
     $primePs1 = Join-Path $DataDir "prime.ps1"
