@@ -100,11 +100,11 @@ if defined REMOTE_VER (
           echo @echo off
           echo ping 127.0.0.1 -n 2 ^>nul
           echo move /y "%DG%\dgc.cmd.new" "%SELF_CMD%" ^>nul 2^>^&1
-          echo call "%SELF_CMD%" %%*
+          echo call "%SELF_CMD%" "%PROJECT%"
           echo del "%%~f0" ^>nul 2^>^&1
         ) > "!APPLY_BAT!"
         echo [%TOOL%] Updated to %REMOTE_VER%. Restarting launcher...
-        start "" /b cmd /c "\"!APPLY_BAT!\" %*"
+        start "" /b cmd /d /c call "\"!APPLY_BAT!\""
         exit /b
       )
       echo [%TOOL%] Updated to %REMOTE_VER%. Launcher will refresh on next run.
@@ -302,9 +302,12 @@ set "STOP_PS1=%DATA_DIR%\stop_hook.ps1"
     echo }
 ) > "%STOP_PS1%"
 
+set "PRIME_PS1_FWD=%PRIME_PS1:\=/%"
+set "STOP_PS1_FWD=%STOP_PS1:\=/%"
+
 if not exist "%SETTINGS_DIR%" mkdir "%SETTINGS_DIR%"
 powershell -NoProfile -Command ^
-  "& { $prime = 'powershell -NoProfile -File ""%PRIME_PS1%""'; $stop = 'powershell -NoProfile -File ""%STOP_PS1%""'; $obj = @{ hooks = @{ SessionStart = @(@{ matcher = ''; hooks = @(@{ type = 'command'; command = $prime }) }); PreCompact = @(@{ matcher = ''; hooks = @(@{ type = 'command'; command = $prime }) }); Stop = @(@{ matcher = ''; hooks = @(@{ type = 'command'; command = $stop }) }) } }; $obj | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath '%SETTINGS_FILE%' -Encoding UTF8 }"
+  "& { $prime = 'powershell -NoProfile -File ""%PRIME_PS1_FWD%""'; $stop = 'powershell -NoProfile -File ""%STOP_PS1_FWD%""'; $obj = @{ hooks = @{ SessionStart = @(@{ matcher = ''; hooks = @(@{ type = 'command'; command = $prime }) }); PreCompact = @(@{ matcher = ''; hooks = @(@{ type = 'command'; command = $prime }) }); Stop = @(@{ matcher = ''; hooks = @(@{ type = 'command'; command = $stop }) }) } }; $obj | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath '%SETTINGS_FILE%' -Encoding UTF8 }"
 echo [%TOOL%] Context hooks ready ^(SessionStart + PreCompact + Stop^)
 
 :: ── One-time feedback form ─────────────────────────────────────────────────
