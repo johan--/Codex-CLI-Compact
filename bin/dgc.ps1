@@ -382,7 +382,9 @@ if ($transcript -and (Test-Path $transcript)) {
         $last = ($lines | Where-Object { $_.type -eq 'assistant' }) | Select-Object -Last 1
         $chars = ([string]($last.message.content)).Length
         $out = [Math]::Max(1, [int]($chars / 4)); $in = $out * 4
-        Invoke-RestMethod -Method Post -Uri 'http://localhost:8899/log' -ContentType 'application/json' -Body ("{`"input_tokens`":$in,`"output_tokens`":$out,`"model`":`"claude-sonnet-4-6`",`"description`":`"auto`",`"project`":`"__PROJECT__`"}") -ErrorAction SilentlyContinue | Out-Null
+        $portFile = Join-Path $env:USERPROFILE ".claude\token-counter\dashboard-port.txt"
+        $dashPort = if (Test-Path $portFile) { (Get-Content $portFile -Raw).Trim() } else { "8899" }
+        Invoke-RestMethod -Method Post -Uri "http://localhost:$dashPort/log" -ContentType 'application/json' -Body ("{`"input_tokens`":$in,`"output_tokens`":$out,`"model`":`"claude-sonnet-4-6`",`"description`":`"auto`",`"project`":`"__PROJECT__`"}") -ErrorAction SilentlyContinue | Out-Null
     } catch {}
 }
 '@
