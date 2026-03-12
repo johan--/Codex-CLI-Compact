@@ -10,6 +10,44 @@ try {
     $INSTALL_DIR = "$env:USERPROFILE\.dual-graph"
     $WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbyq_5igbBUORhSqMNktAoX2GQg8BadKcYZOTV-XRUr3vbY3QuK7jjS8EWLg_pZyMDuD/exec"
 
+    # Prefer modern TLS to avoid intermittent "underlying connection was closed" failures.
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+    } catch {
+        try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
+    }
+
+    function Normalize-NetworkError([string]$message) {
+        if ([string]::IsNullOrWhiteSpace($message)) { return "unknown network error" }
+        if ($message -match "Connessione sottostante chiusa") {
+            return "Underlying connection was closed: unexpected failure during a send operation."
+        }
+        return $message
+    }
+
+    function Invoke-WebRequestWithRetry {
+        param(
+            [Parameter(Mandatory = $true)][string]$Uri,
+            [Parameter(Mandatory = $true)][string]$OutFile,
+            [Parameter(Mandatory = $true)][string]$Label,
+            [int]$MaxRetries = 4,
+            [int]$TimeoutSec = 30
+        )
+        for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
+            try {
+                Invoke-WebRequest $Uri -OutFile $OutFile -UseBasicParsing -TimeoutSec $TimeoutSec
+                return
+            } catch {
+                if ($attempt -ge $MaxRetries) {
+                    $raw = "$($_.Exception.Message)"
+                    $norm = Normalize-NetworkError $raw
+                    throw "$Label failed after $MaxRetries attempts: $norm"
+                }
+                Start-Sleep -Seconds ([Math]::Min(2 * $attempt, 8))
+            }
+        }
+    }
+
     $step = "Initializing install directory"
     New-Item -ItemType Directory -Force -Path $INSTALL_DIR | Out-Null
 
@@ -52,21 +90,21 @@ try {
     # ── Download core engine ──────────────────────────────────────────────────────
     $step = "Downloading core engine"
     Write-Host "[install] Downloading core engine..."
-    Invoke-WebRequest "$R2/mcp_graph_server.py"  -OutFile "$INSTALL_DIR\mcp_graph_server.py"  -UseBasicParsing
-    Invoke-WebRequest "$R2/graph_builder.py"     -OutFile "$INSTALL_DIR\graph_builder.py"     -UseBasicParsing
-    Invoke-WebRequest "$R2/dual_graph_launch.sh" -OutFile "$INSTALL_DIR\dual_graph_launch.sh" -UseBasicParsing
-    Invoke-WebRequest "$R2/dg.py"               -OutFile "$INSTALL_DIR\dg.py"               -UseBasicParsing
+    Invoke-WebRequestWithRetry -Uri "$R2/mcp_graph_server.py"  -OutFile "$INSTALL_DIR\mcp_graph_server.py"  -Label "Download mcp_graph_server.py"
+    Invoke-WebRequestWithRetry -Uri "$R2/graph_builder.py"     -OutFile "$INSTALL_DIR\graph_builder.py"     -Label "Download graph_builder.py"
+    Invoke-WebRequestWithRetry -Uri "$R2/dual_graph_launch.sh" -OutFile "$INSTALL_DIR\dual_graph_launch.sh" -Label "Download dual_graph_launch.sh"
+    Invoke-WebRequestWithRetry -Uri "$R2/dg.py"                -OutFile "$INSTALL_DIR\dg.py"                -Label "Download dg.py"
 
     $step = "Downloading CLI wrappers"
     Write-Host "[install] Downloading CLI wrappers..."
-    Invoke-WebRequest "$BASE_URL/bin/dgc.cmd" -OutFile "$INSTALL_DIR\dgc.cmd" -UseBasicParsing
-    Invoke-WebRequest "$BASE_URL/bin/dg.cmd"  -OutFile "$INSTALL_DIR\dg.cmd"  -UseBasicParsing
-    Invoke-WebRequest "$BASE_URL/bin/dgc.ps1" -OutFile "$INSTALL_DIR\dgc.ps1" -UseBasicParsing
-    Invoke-WebRequest "$BASE_URL/bin/dg.ps1"  -OutFile "$INSTALL_DIR\dg.ps1"  -UseBasicParsing
+    Invoke-WebRequestWithRetry -Uri "$BASE_URL/bin/dgc.cmd" -OutFile "$INSTALL_DIR\dgc.cmd" -Label "Download dgc.cmd"
+    Invoke-WebRequestWithRetry -Uri "$BASE_URL/bin/dg.cmd"  -OutFile "$INSTALL_DIR\dg.cmd"  -Label "Download dg.cmd"
+    Invoke-WebRequestWithRetry -Uri "$BASE_URL/bin/dgc.ps1" -OutFile "$INSTALL_DIR\dgc.ps1" -Label "Download dgc.ps1"
+    Invoke-WebRequestWithRetry -Uri "$BASE_URL/bin/dg.ps1"  -OutFile "$INSTALL_DIR\dg.ps1"  -Label "Download dg.ps1"
     try {
-        Invoke-WebRequest "$BASE_URL/bin/version.txt" -OutFile "$INSTALL_DIR\version.txt" -UseBasicParsing
+        Invoke-WebRequestWithRetry -Uri "$BASE_URL/bin/version.txt" -OutFile "$INSTALL_DIR\version.txt" -Label "Download version.txt"
     } catch {
-        try { Invoke-WebRequest "$R2/version.txt" -OutFile "$INSTALL_DIR\version.txt" -UseBasicParsing } catch {}
+        try { Invoke-WebRequestWithRetry -Uri "$R2/version.txt" -OutFile "$INSTALL_DIR\version.txt" -Label "Download version.txt fallback" } catch {}
     }
 
     # ── Find Python 3.11 (preferred) or fall back ─────────────────────────────────
@@ -135,7 +173,7 @@ try {
     Write-Host "  dg  `"C:\path\to\your\project`"   # Codex CLI"
 
 } catch {
-    $errMessage = $_.Exception.Message
+    $errMessage = Normalize-NetworkError "$($_.Exception.Message)"
     Write-Host "`n[install] ERROR: Installation failed during: $step" -ForegroundColor Red
     Write-Host "[install] Details: $errMessage" -ForegroundColor Red
     
