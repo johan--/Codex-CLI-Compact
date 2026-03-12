@@ -315,6 +315,12 @@ try {
                 $exit = Invoke-NativeQuiet $npxCmd @("-y", "token-counter-mcp", "setup", "https://github.com/kunal12203/token-counter-mcp")
                 if ($exit -eq 0) {
                     Write-Host "[$Tool] Token counter installed"
+                    try {
+                        Start-Process $npxCmd -ArgumentList "token-counter-mcp dashboard" -WindowStyle Hidden
+                    } catch {}
+                    $portFile = Join-Path $env:USERPROFILE ".claude\token-counter\dashboard-port.txt"
+                    $dashPort = if (Test-Path $portFile) { (Get-Content $portFile -Raw).Trim() } else { "8899" }
+                    Write-Host "[$Tool] Token counter dashboard -> http://localhost:$dashPort"
                 } else {
                     Write-Host "[$Tool] Token counter setup failed"
                 }
