@@ -126,6 +126,27 @@ function Invoke-NativeQuiet([string]$FilePath, [string[]]$Arguments) {
     }
 }
 
+function Invoke-NativeCapture([string]$FilePath, [string[]]$Arguments) {
+    $hasNativePref = Test-Path variable:PSNativeCommandUseErrorActionPreference
+    if ($hasNativePref) { $previousNativePref = $PSNativeCommandUseErrorActionPreference }
+    try {
+        if ($hasNativePref) { $global:PSNativeCommandUseErrorActionPreference = $false }
+        return & $FilePath @Arguments 2>$null
+    } finally {
+        if ($hasNativePref) { $global:PSNativeCommandUseErrorActionPreference = $previousNativePref }
+    }
+}
+
+function Has-ClaudeMcp([string]$Name) {
+    try {
+        $list = Invoke-NativeCapture "claude" @("mcp", "list")
+        if ($null -eq $list) { return $false }
+        return ($list -join "`n") -match ("(?i)\b" + [regex]::Escape($Name) + "\b")
+    } catch {
+        return $false
+    }
+}
+
 try {
     if (-not (Test-Path $DG)) { New-Item -ItemType Directory -Force -Path $DG | Out-Null }
     if (-not (Test-Path $Python)) { throw "Python environment not found. Please reinstall dual-graph once." }
@@ -255,7 +276,9 @@ try {
 
     # PowerShell 7 can treat non-zero native exits as terminating errors.
     # Handle Claude CLI exits explicitly so "not found" on remove stays harmless.
-    [void](Invoke-NativeQuiet "claude" @("mcp", "remove", "dual-graph"))
+    if (Has-ClaudeMcp "dual-graph") {
+        [void](Invoke-NativeQuiet "claude" @("mcp", "remove", "dual-graph"))
+    }
     $mcpAddExit = Invoke-NativeQuiet "claude" @("mcp", "add", "--transport", "http", "dual-graph", "http://localhost:$port/mcp")
     if ($mcpAddExit -ne 0) {
         $mcpAddExit = Invoke-NativeQuiet "claude" @("mcp", "add", "dual-graph", "--url", "http://localhost:$port/mcp")
@@ -273,8 +296,10 @@ try {
     }
     Write-Host "[$Tool] MCP registered -> http://localhost:$port/mcp"
 
-    [void](Invoke-NativeQuiet "claude" @("mcp", "remove", "token-counter", "--scope", "user"))
-    [void](Invoke-NativeQuiet "claude" @("mcp", "remove", "token-counter"))
+    if (Has-ClaudeMcp "token-counter") {
+        [void](Invoke-NativeQuiet "claude" @("mcp", "remove", "token-counter", "--scope", "user"))
+        [void](Invoke-NativeQuiet "claude" @("mcp", "remove", "token-counter"))
+    }
     [void](Invoke-NativeQuiet "claude" @("mcp", "add", "--scope", "user", "token-counter", "--", "npx", "-y", "token-counter-mcp"))
     Write-Host "[$Tool] Token counter registered (global)"
 
@@ -351,8 +376,12 @@ if ($transcript -and (Test-Path $transcript)) {
 
     Write-Host ""
     Write-Host "[$Tool] Cleaning up..."
-    [void](Invoke-NativeQuiet "claude" @("mcp", "remove", "dual-graph"))
-    [void](Invoke-NativeQuiet "claude" @("mcp", "remove", "token-counter"))
+    if (Has-ClaudeMcp "dual-graph") {
+        [void](Invoke-NativeQuiet "claude" @("mcp", "remove", "dual-graph"))
+    }
+    if (Has-ClaudeMcp "token-counter") {
+        [void](Invoke-NativeQuiet "claude" @("mcp", "remove", "token-counter"))
+    }
     if (Test-Path $pidFile) {
         try { Stop-Process -Id ([int](Get-Content $pidFile -Raw)) -Force -ErrorAction SilentlyContinue } catch {}
         Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
