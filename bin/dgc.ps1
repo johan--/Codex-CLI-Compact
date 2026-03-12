@@ -72,8 +72,8 @@ function Download-File([string]$Primary, [string]$Fallback, [string]$OutFile) {
     return $false
 }
 
-function Get-FreePort {
-    for ($port = 8080; $port -le 8099; $port++) {
+function Get-FreePort([int]$Start = 8080) {
+    for ($port = $Start; $port -le 8099; $port++) {
         try {
             $listener = [System.Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $port)
             $listener.Start()
@@ -268,22 +268,40 @@ try {
     }
 
     $port = Get-FreePort
-    Write-Host "[$Tool] Starting MCP server on port $port..."
     $log = Join-Path $DataDir "mcp_server.log"
     $errLog = Join-Path $DataDir "mcp_server.err.log"
-    $env:DG_DATA_DIR = $DataDir
-    $env:DUAL_GRAPH_PROJECT_ROOT = $resolvedProject
-    $env:DG_BASE_URL = "http://localhost:$port"
-    $env:PORT = "$port"
-    $server = Start-Process -FilePath $Python -ArgumentList @((Join-Path $DG "mcp_graph_server.py")) -RedirectStandardOutput $log -RedirectStandardError $errLog -WindowStyle Hidden -PassThru
-    Set-Content -Path $pidFile -Value "$($server.Id)" -Encoding UTF8
-    Set-Content -Path $portFile -Value "$port" -Encoding UTF8
-    if (-not (Wait-Port -Port $port)) {
-        Send-CliError "Starting MCP server" "MCP server did not start in dgc.ps1"
-        throw "MCP server did not start"
+    $maxAttempts = 5
+    for ($attempt = 0; $attempt -lt $maxAttempts; $attempt++) {
+        Write-Host "[$Tool] Starting MCP server on port $port..."
+        $env:DG_DATA_DIR = $DataDir
+        $env:DUAL_GRAPH_PROJECT_ROOT = $resolvedProject
+        $env:DG_BASE_URL = "http://localhost:$port"
+        $env:PORT = "$port"
+        $server = Start-Process -FilePath $Python -ArgumentList @((Join-Path $DG "mcp_graph_server.py")) -RedirectStandardOutput $log -RedirectStandardError $errLog -WindowStyle Hidden -PassThru
+        if (-not (Wait-Port -Port $port)) {
+            try { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue } catch {}
+            if ($attempt -eq ($maxAttempts - 1)) {
+                Send-CliError "Starting MCP server" "MCP server did not start in dgc.ps1"
+                throw "MCP server did not start"
+            }
+            $port = Get-FreePort ($port + 1)
+            continue
+        }
+        $listenerPid = (Get-NetTCPConnection -LocalPort $port -State Listen -EA SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess)
+        if ($listenerPid -and ($listenerPid -ne $server.Id)) {
+            try { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue } catch {}
+            if ($attempt -eq ($maxAttempts - 1)) {
+                throw "MCP port $port is already in use by another process. Set DG_MCP_PORT to a free port or stop the conflicting process."
+            }
+            $port = Get-FreePort ($port + 1)
+            continue
+        }
+        Set-Content -Path $pidFile -Value "$($server.Id)" -Encoding UTF8
+        Set-Content -Path $portFile -Value "$port" -Encoding UTF8
+        Write-Host "[$Tool] MCP server ready on port $port."
+        Write-Host ""
+        break
     }
-    Write-Host "[$Tool] MCP server ready on port $port."
-    Write-Host ""
 
     # PowerShell 7 can treat non-zero native exits as terminating errors.
     # Handle Claude CLI exits explicitly so "not found" on remove stays harmless.
