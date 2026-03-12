@@ -55,6 +55,19 @@ if defined REMOTE_VER (
       powershell -NoProfile -Command "try { Invoke-WebRequest '%BASE_URL%/bin/dgc.ps1' -OutFile '%DG%\dgc.ps1' -UseBasicParsing } catch {}" >nul 2>&1
       powershell -NoProfile -Command "try { Invoke-WebRequest '%BASE_URL%/bin/dg.ps1' -OutFile '%DG%\dg.ps1' -UseBasicParsing } catch {}" >nul 2>&1
       echo %REMOTE_VER%> "%DG%\version.txt"
+      if exist "%DG%\dg.cmd.new" (
+        set "APPLY_BAT=%TEMP%\dg_apply_%RANDOM%.bat"
+        (
+          echo @echo off
+          echo ping 127.0.0.1 -n 2 ^>nul
+          echo move /y "%DG%\dg.cmd.new" "%SELF_CMD%" ^>nul 2^>^&1
+          echo call "%SELF_CMD%" %%*
+          echo del "%%~f0" ^>nul 2^>^&1
+        ) > "!APPLY_BAT!"
+        echo [%TOOL%] Updated to %REMOTE_VER%. Restarting launcher...
+        start "" /b cmd /c "\"!APPLY_BAT!\" %*"
+        exit /b
+      )
       echo [%TOOL%] Updated to %REMOTE_VER%. Launcher will refresh on next run.
     ) else (
       if not "%REMOTE_VER%"=="%LOCAL_VER%" (
