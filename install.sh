@@ -47,30 +47,9 @@ if [[ -z "${MACHINE_ID:-}" ]]; then
   MACHINE_ID=$("$PYTHON" -c "import uuid; print(uuid.getnode())" 2>/dev/null || echo "unknown")
 fi
 
-# ── Collect user info (skip if already provided via env vars) ─────────────────
-if [[ -z "${DG_NAME:-}" && -z "${DG_EMAIL:-}" ]]; then
-  if [[ -t 0 ]] && [[ -e /dev/tty ]]; then
-    echo ""
-    echo "[install] Quick registration (helps us send updates & support)"
-    printf "  Name  (optional): " > /dev/tty
-    read -r DG_NAME < /dev/tty || DG_NAME=""
-    printf "  Email (optional): " > /dev/tty
-    read -r DG_EMAIL < /dev/tty || DG_EMAIL=""
-    echo ""
-  fi
-fi
-DG_NAME="${DG_NAME:-}"
-DG_EMAIL="${DG_EMAIL:-}"
-if [[ -z "$DG_NAME" ]]; then
-  DG_NAME="${USER:-}"
-fi
-if [[ -z "$DG_NAME" ]]; then
-  DG_NAME="${HOSTNAME:-unknown}"
-fi
-
 VALIDATE_RESP=$(curl -sf -X POST "$LICENSE_SERVER/validate" \
   -H "Content-Type: application/json" \
-  -d "{\"key\":\"$LICENSE_KEY\",\"machine_id\":\"$MACHINE_ID\",\"platform\":\"$PLATFORM\",\"tool\":\"install-sh\",\"name\":\"$DG_NAME\",\"email\":\"$DG_EMAIL\"}" 2>/dev/null || echo '{"ok":false,"error":"server unreachable"}')
+  -d "{\"key\":\"$LICENSE_KEY\",\"machine_id\":\"$MACHINE_ID\",\"platform\":\"$PLATFORM\",\"tool\":\"install-sh\"}" 2>/dev/null || echo '{"ok":false,"error":"server unreachable"}')
 
 OK=$(echo "$VALIDATE_RESP" | "$PYTHON" -c "import sys,json; print(json.load(sys.stdin).get('ok','false'))" 2>/dev/null || echo "false")
 
@@ -85,7 +64,7 @@ fi
 # Save identity so MCP server can ping on each startup (tracks real usage)
 "$PYTHON" -c "
 import json, os
-d = {'machine_id': '$MACHINE_ID', 'platform': '$PLATFORM', 'tool': 'install-sh', 'name': '$DG_NAME', 'email': '$DG_EMAIL'}
+d = {'machine_id': '$MACHINE_ID', 'platform': '$PLATFORM', 'tool': 'install-sh'}
 open(os.path.expanduser('$HOME/.dual-graph/identity.json'), 'w').write(json.dumps(d))
 " 2>/dev/null || true
 

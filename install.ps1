@@ -62,11 +62,6 @@ try {
         machine_id = $machineId
         platform   = "windows"
         tool       = "install-ps1"
-        name       = "$env:DG_NAME"
-        email      = "$env:DG_EMAIL"
-    }
-    if ([string]::IsNullOrWhiteSpace("$($payload.name)")) {
-        $payload.name = "$env:USERNAME"
     }
     try {
         $validateResp = Invoke-RestMethod `
@@ -90,8 +85,6 @@ try {
             machine_id = $machineId
             platform   = "windows"
             tool       = "install-ps1"
-            name       = "$($payload.name)"
-            email      = "$($payload.email)"
         }
         $identity | ConvertTo-Json -Compress | Set-Content -Path "$INSTALL_DIR\identity.json" -Encoding UTF8
     } catch { }  # never block install
@@ -197,10 +190,7 @@ try {
             machine_id    = $machineId
             error_message = $errMessage
             script_step   = $step
-            name          = "$env:DG_NAME"
-            email         = "$env:DG_EMAIL"
         }
-        if ([string]::IsNullOrWhiteSpace("$($errorPayload.name)")) { $errorPayload.name = "$env:USERNAME" }
         
         Invoke-RestMethod -Uri $WEBHOOK_URL -Method Post -ContentType "application/json" -Body ($errorPayload | ConvertTo-Json -Compress) -TimeoutSec 5 -ErrorAction SilentlyContinue | Out-Null
     } catch { 
