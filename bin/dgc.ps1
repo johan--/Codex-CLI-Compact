@@ -114,6 +114,18 @@ function Ensure-Line([string]$File, [string]$Line) {
     }
 }
 
+function Invoke-NativeQuiet([string]$FilePath, [string[]]$Arguments) {
+    $hasNativePref = Test-Path variable:PSNativeCommandUseErrorActionPreference
+    if ($hasNativePref) { $previousNativePref = $PSNativeCommandUseErrorActionPreference }
+    try {
+        if ($hasNativePref) { $global:PSNativeCommandUseErrorActionPreference = $false }
+        & $FilePath @Arguments > $null 2>&1
+        return $LASTEXITCODE
+    } finally {
+        if ($hasNativePref) { $global:PSNativeCommandUseErrorActionPreference = $previousNativePref }
+    }
+}
+
 try {
     if (-not (Test-Path $DG)) { New-Item -ItemType Directory -Force -Path $DG | Out-Null }
     if (-not (Test-Path $Python)) { throw "Python environment not found. Please reinstall dual-graph once." }
@@ -241,14 +253,14 @@ try {
     Write-Host "[$Tool] MCP server ready on port $port."
     Write-Host ""
 
-    # Run Claude MCP commands through cmd.exe so a harmless "not found" remove
-    # does not get promoted into a terminating PowerShell error on newer shells.
-    cmd /d /c "claude mcp remove dual-graph" > $null 2>&1
-    cmd /d /c "claude mcp add --transport http dual-graph http://localhost:$port/mcp" > $null 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        cmd /d /c "claude mcp add dual-graph --url http://localhost:$port/mcp" > $null 2>&1
+    # PowerShell 7 can treat non-zero native exits as terminating errors.
+    # Handle Claude CLI exits explicitly so "not found" on remove stays harmless.
+    [void](Invoke-NativeQuiet "claude" @("mcp", "remove", "dual-graph"))
+    $mcpAddExit = Invoke-NativeQuiet "claude" @("mcp", "add", "--transport", "http", "dual-graph", "http://localhost:$port/mcp")
+    if ($mcpAddExit -ne 0) {
+        $mcpAddExit = Invoke-NativeQuiet "claude" @("mcp", "add", "dual-graph", "--url", "http://localhost:$port/mcp")
     }
-    if ($LASTEXITCODE -ne 0) {
+    if ($mcpAddExit -ne 0) {
         Send-CliError "Registering MCP" "MCP registration failed in dgc.ps1"
         Write-Host "[$Tool] Error: failed to register MCP in Claude."
         Write-Host "[$Tool] Try this:"
@@ -261,9 +273,9 @@ try {
     }
     Write-Host "[$Tool] MCP registered -> http://localhost:$port/mcp"
 
-    cmd /d /c "claude mcp remove token-counter --scope user" > $null 2>&1
-    cmd /d /c "claude mcp remove token-counter" > $null 2>&1
-    cmd /d /c "claude mcp add --scope user token-counter -- npx -y token-counter-mcp" > $null 2>&1
+    [void](Invoke-NativeQuiet "claude" @("mcp", "remove", "token-counter", "--scope", "user"))
+    [void](Invoke-NativeQuiet "claude" @("mcp", "remove", "token-counter"))
+    [void](Invoke-NativeQuiet "claude" @("mcp", "add", "--scope", "user", "token-counter", "--", "npx", "-y", "token-counter-mcp"))
     Write-Host "[$Tool] Token counter registered (global)"
 
     $primePs1 = Join-Path $DataDir "prime.ps1"
@@ -339,8 +351,8 @@ if ($transcript -and (Test-Path $transcript)) {
 
     Write-Host ""
     Write-Host "[$Tool] Cleaning up..."
-    cmd /d /c "claude mcp remove dual-graph" > $null 2>&1
-    cmd /d /c "claude mcp remove token-counter" > $null 2>&1
+    [void](Invoke-NativeQuiet "claude" @("mcp", "remove", "dual-graph"))
+    [void](Invoke-NativeQuiet "claude" @("mcp", "remove", "token-counter"))
     if (Test-Path $pidFile) {
         try { Stop-Process -Id ([int](Get-Content $pidFile -Raw)) -Force -ErrorAction SilentlyContinue } catch {}
         Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
