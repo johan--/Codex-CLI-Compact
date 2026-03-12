@@ -296,15 +296,15 @@ try {
     }
     Write-Host "[$Tool] MCP registered -> http://localhost:$port/mcp"
 
-    if (Has-ClaudeMcp "token-counter") {
-        [void](Invoke-NativeQuiet "claude" @("mcp", "remove", "token-counter", "--scope", "user"))
-        [void](Invoke-NativeQuiet "claude" @("mcp", "remove", "token-counter"))
+    if (-not (Has-ClaudeMcp "token-counter")) {
+        # Windows: use cmd /c and a fully-qualified npx path so MCP inherits PATH correctly.
+        $npxPath = (Get-Command npx -ErrorAction SilentlyContinue).Source
+        if (-not $npxPath) { $npxPath = "npx" }
+        [void](Invoke-NativeQuiet "claude" @("mcp", "add", "--scope", "user", "token-counter", "--", "cmd", "/c", $npxPath, "-y", "token-counter-mcp"))
+        Write-Host "[$Tool] Token counter registered (global)"
+    } else {
+        Write-Host "[$Tool] Token counter already registered (global)"
     }
-    # Windows: use cmd /c and a fully-qualified npx path so MCP inherits PATH correctly.
-    $npxPath = (Get-Command npx -ErrorAction SilentlyContinue).Source
-    if (-not $npxPath) { $npxPath = "npx" }
-    [void](Invoke-NativeQuiet "claude" @("mcp", "add", "--scope", "user", "token-counter", "--", "cmd", "/c", $npxPath, "-y", "token-counter-mcp"))
-    Write-Host "[$Tool] Token counter registered (global)"
 
     $primePs1 = Join-Path $DataDir "prime.ps1"
     $stopPs1 = Join-Path $DataDir "stop_hook.ps1"
@@ -382,9 +382,7 @@ if ($transcript -and (Test-Path $transcript)) {
     if (Has-ClaudeMcp "dual-graph") {
         [void](Invoke-NativeQuiet "claude" @("mcp", "remove", "dual-graph"))
     }
-    if (Has-ClaudeMcp "token-counter") {
-        [void](Invoke-NativeQuiet "claude" @("mcp", "remove", "token-counter"))
-    }
+    # Token counter is global; do not remove it on exit.
     if (Test-Path $pidFile) {
         try { Stop-Process -Id ([int](Get-Content $pidFile -Raw)) -Force -ErrorAction SilentlyContinue } catch {}
         Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
