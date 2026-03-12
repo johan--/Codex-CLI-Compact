@@ -308,44 +308,13 @@ try {
     if (-not $env:DG_DISABLE_TOKEN_COUNTER) {
         # Wrap entirely so token-counter failures never kill the main launcher.
         try {
-                Remove-ClaudeMcpSafe "token-counter"
-
-            $nodeCmd = (Get-Command node -ErrorAction SilentlyContinue).Source
-            $npmCmd  = (Get-Command npm.cmd -ErrorAction SilentlyContinue).Source
-            if ($nodeCmd -and $npmCmd) {
-                # Pre-install token-counter-mcp once so Claude never spawns a visible cmd window.
-                $tcDir = Join-Path $DG "tc"
-                $tcPkg = Join-Path $tcDir "node_modules\token-counter-mcp\package.json"
-                if (-not (Test-Path $tcPkg)) {
-                    Write-Host "[$Tool] Installing token-counter-mcp (one-time)..."
-                    New-Item -ItemType Directory -Force -Path $tcDir | Out-Null
-                    Set-Content -Path (Join-Path $tcDir "package.json") -Value '{"name":"tc-host","version":"1.0.0","private":true}' -Encoding UTF8
-                    [void](Invoke-NativeQuiet $npmCmd @("install", "--prefix", $tcDir, "--no-package-lock", "token-counter-mcp"))
-                }
-                # Resolve the JS entry point from the installed package.json.
-                $tcMain = $null
-                if (Test-Path $tcPkg) {
-                    try {
-                        $pkgData = Get-Content $tcPkg -Raw | ConvertFrom-Json
-                        $pkgDir  = Split-Path $tcPkg
-                        $bin = $pkgData.bin
-                        if ($bin -is [string] -and $bin) {
-                            $tcMain = Join-Path $pkgDir $bin
-                        } elseif ($bin -and $bin.'token-counter-mcp') {
-                            $tcMain = Join-Path $pkgDir $bin.'token-counter-mcp'
-                        } elseif ($pkgData.main) {
-                            $tcMain = Join-Path $pkgDir $pkgData.main
-                        }
-                    } catch {}
-                }
-                if ($tcMain -and (Test-Path $tcMain)) {
-                    [void](Invoke-NativeQuiet "claude" @("mcp", "add", "--scope", "user", "token-counter", "--", $nodeCmd, $tcMain))
-                    Write-Host "[$Tool] Token counter registered (global)"
-                } else {
-                    Write-Host "[$Tool] Token counter skipped (install failed). Set DG_DISABLE_TOKEN_COUNTER=1 to silence."
-                }
+            Remove-ClaudeMcpSafe "token-counter"
+            $npxCmd = (Get-Command npx.cmd -ErrorAction SilentlyContinue).Source
+            if ($npxCmd) {
+                [void](Invoke-NativeQuiet "claude" @("mcp", "add", "--scope", "user", "token-counter", "--", "cmd", "/c", $npxCmd, "-y", "token-counter-mcp"))
+                Write-Host "[$Tool] Token counter registered (global)"
             } else {
-                Write-Host "[$Tool] Token counter skipped (no node/npm found). Set DG_DISABLE_TOKEN_COUNTER=1 to silence."
+                Write-Host "[$Tool] Token counter skipped (no npx.cmd found). Set DG_DISABLE_TOKEN_COUNTER=1 to silence."
             }
         } catch {
             Write-Host "[$Tool] Token counter setup skipped: $($_.Exception.Message)"
