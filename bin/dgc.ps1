@@ -325,10 +325,10 @@ try {
                 if ($exit -eq 0) {
                     Write-Host "[$Tool] Token counter installed"
                     try {
-                        Start-Process $npxCmd -ArgumentList "token-counter-mcp dashboard" -WindowStyle Hidden
+                        Start-Process $npxCmd -ArgumentList "token-counter-mcp dashboard --port 8899" -WindowStyle Hidden
                     } catch {}
                     $portFile = Join-Path $env:USERPROFILE ".claude\token-counter\dashboard-port.txt"
-                    $dashPort = if (Test-Path $portFile) { (Get-Content $portFile -Raw).Trim() } else { "8899" }
+                    $dashPort = "8899"
                     Write-Host "[$Tool] Token counter dashboard -> http://localhost:$dashPort"
                 } else {
                     Write-Host "[$Tool] Token counter setup failed"
