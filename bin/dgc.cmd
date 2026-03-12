@@ -267,7 +267,7 @@ if not exist "%DG%\feedback_done" (
     set "SHOW_FEEDBACK=1"
     if exist "%DG%\install_date.txt" (
         set /p INSTALL_DATE=<"%DG%\install_date.txt"
-        powershell -NoProfile -Command "if ((Get-Date -Format 'yyyy-MM-dd') -gt '%INSTALL_DATE%') { exit 0 } else { exit 1 }" >nul 2>&1
+        powershell -NoProfile -Command "try { $d=[datetime]::ParseExact('%INSTALL_DATE%','yyyy-MM-dd',$null); if ((Get-Date).Date -ge $d.AddDays(2).Date) { exit 0 } else { exit 1 } } catch { exit 1 }" >nul 2>&1
         if errorlevel 1 set "SHOW_FEEDBACK=0"
     )
     if "!SHOW_FEEDBACK!"=="1" (

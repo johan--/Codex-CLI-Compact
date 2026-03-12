@@ -586,8 +586,18 @@ if [[ ! -f "$_FEEDBACK_DONE" ]] && [[ -t 0 ]]; then
   _SHOW_FEEDBACK=1
   if [[ -f "$_INSTALL_DATE_FILE" ]]; then
     _INSTALL_DATE="$(cat "$_INSTALL_DATE_FILE")"
-    _TODAY="$(date +%Y-%m-%d)"
-    [[ "$_TODAY" > "$_INSTALL_DATE" ]] || _SHOW_FEEDBACK=0
+    if ! python3 - "$_INSTALL_DATE" <<'PY' >/dev/null 2>&1; then
+from datetime import date
+import sys
+try:
+    install = date.fromisoformat(sys.argv[1].strip())
+    ready = (date.today() - install).days >= 2
+    raise SystemExit(0 if ready else 1)
+except Exception:
+    raise SystemExit(1)
+PY
+      _SHOW_FEEDBACK=0
+    fi
   fi
   if [[ "$_SHOW_FEEDBACK" == "1" ]]; then
     echo "===================================================="
