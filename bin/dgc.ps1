@@ -241,8 +241,11 @@ try {
     Write-Host "[$Tool] MCP server ready on port $port."
     Write-Host ""
 
-    & claude mcp remove dual-graph *> $null
-    & claude mcp add --transport http dual-graph "http://localhost:$port/mcp" *> $null
+    cmd /d /c "claude mcp remove dual-graph" > $null 2>&1
+    & claude mcp add --transport http dual-graph "http://localhost:$port/mcp" > $null 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        & claude mcp add dual-graph --url "http://localhost:$port/mcp" > $null 2>&1
+    }
     if ($LASTEXITCODE -ne 0) {
         Send-CliError "Registering MCP" "MCP registration failed in dgc.ps1"
         Write-Host "[$Tool] Error: failed to register MCP in Claude."
@@ -256,9 +259,9 @@ try {
     }
     Write-Host "[$Tool] MCP registered -> http://localhost:$port/mcp"
 
-    & claude mcp remove token-counter --scope user *> $null
-    & claude mcp remove token-counter *> $null
-    & claude mcp add --scope user token-counter -- npx -y token-counter-mcp *> $null
+    cmd /d /c "claude mcp remove token-counter --scope user" > $null 2>&1
+    cmd /d /c "claude mcp remove token-counter" > $null 2>&1
+    & claude mcp add --scope user token-counter -- npx -y token-counter-mcp > $null 2>&1
     Write-Host "[$Tool] Token counter registered (global)"
 
     $primePs1 = Join-Path $DataDir "prime.ps1"
@@ -334,8 +337,8 @@ if ($transcript -and (Test-Path $transcript)) {
 
     Write-Host ""
     Write-Host "[$Tool] Cleaning up..."
-    & claude mcp remove dual-graph *> $null
-    & claude mcp remove token-counter *> $null
+    cmd /d /c "claude mcp remove dual-graph" > $null 2>&1
+    cmd /d /c "claude mcp remove token-counter" > $null 2>&1
     if (Test-Path $pidFile) {
         try { Stop-Process -Id ([int](Get-Content $pidFile -Raw)) -Force -ErrorAction SilentlyContinue } catch {}
         Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
