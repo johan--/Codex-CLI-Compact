@@ -276,9 +276,7 @@ try {
 
     # PowerShell 7 can treat non-zero native exits as terminating errors.
     # Handle Claude CLI exits explicitly so "not found" on remove stays harmless.
-    if (Has-ClaudeMcp "dual-graph") {
-        [void](Invoke-NativeQuiet "claude" @("mcp", "remove", "dual-graph"))
-    }
+    
     $mcpAddExit = Invoke-NativeQuiet "claude" @("mcp", "add", "--transport", "http", "dual-graph", "http://localhost:$port/mcp")
     if ($mcpAddExit -ne 0) {
         $mcpAddExit = Invoke-NativeQuiet "claude" @("mcp", "add", "dual-graph", "--url", "http://localhost:$port/mcp")
