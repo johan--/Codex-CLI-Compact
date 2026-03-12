@@ -287,15 +287,6 @@ try {
             $port = Get-FreePort ($port + 1)
             continue
         }
-        $listenerPid = (Get-NetTCPConnection -LocalPort $port -State Listen -EA SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess)
-        if ($listenerPid -and ($listenerPid -ne $server.Id)) {
-            try { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue } catch {}
-            if ($attempt -eq ($maxAttempts - 1)) {
-                throw "MCP port $port is already in use by another process. Set DG_MCP_PORT to a free port or stop the conflicting process."
-            }
-            $port = Get-FreePort ($port + 1)
-            continue
-        }
         Set-Content -Path $pidFile -Value "$($server.Id)" -Encoding UTF8
         Set-Content -Path $portFile -Value "$port" -Encoding UTF8
         Write-Host "[$Tool] MCP server ready on port $port."
