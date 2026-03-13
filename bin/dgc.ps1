@@ -489,10 +489,15 @@ $hookInput = [Console]::In.ReadToEnd()
 try { $transcript = ($hookInput | ConvertFrom-Json).transcript_path } catch { $transcript = '' }
 if ($transcript -and (Test-Path $transcript)) {
     try {
+        # Track how many lines we already counted to avoid double-counting on resume
+        $offsetFile = $transcript + ".stopoffset"
+        $startLine = 0
+        if (Test-Path $offsetFile) { try { $startLine = [int](Get-Content $offsetFile -Raw).Trim() } catch { $startLine = 0 } }
+        $allLines = @(Get-Content $transcript)
         $inputTk = 0; $cacheCreate = 0; $cacheRead = 0; $outputTk = 0; $model = ''
-        foreach ($line in (Get-Content $transcript)) {
+        for ($i = $startLine; $i -lt $allLines.Count; $i++) {
             try {
-                $msg = $line | ConvertFrom-Json -ErrorAction SilentlyContinue
+                $msg = $allLines[$i] | ConvertFrom-Json -ErrorAction SilentlyContinue
                 if (-not $msg -or $msg.type -ne 'assistant') { continue }
                 $m = $msg.message
                 if (-not $model -and $m.model) { $model = $m.model }
@@ -504,6 +509,8 @@ if ($transcript -and (Test-Path $transcript)) {
                 $outputTk  += [int]($u.output_tokens)
             } catch { continue }
         }
+        # Save current line count so next stop only counts new lines
+        $allLines.Count.ToString() | Set-Content -Path $offsetFile -Encoding UTF8 -ErrorAction SilentlyContinue
         $totalInput = $inputTk + $cacheCreate + $cacheRead
         if ($totalInput -gt 0 -or $outputTk -gt 0) {
             if (-not $model) { $model = 'claude-sonnet-4-6' }

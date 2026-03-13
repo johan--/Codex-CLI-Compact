@@ -605,33 +605,48 @@ PRIMEEOF
   chmod +x "$DATA_DIR/prime.sh"
 
   # Write stop.sh — reads transcript, sums real API usage, POSTs to token counter
+  # Uses an offset file to only count NEW lines since last stop (avoids double-counting on resume)
   cat > "$DATA_DIR/stop.sh" << STOPEOF
 #!/usr/bin/env bash
 INPUT=\$(cat)
 TRANSCRIPT=\$(echo "\$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('transcript_path',''))" 2>/dev/null || echo "")
 if [[ -n "\$TRANSCRIPT" && -f "\$TRANSCRIPT" ]]; then
   USAGE=\$(python3 - "\$TRANSCRIPT" 2>/dev/null << 'PYEOF'
-import json, sys
+import json, sys, os
+transcript = sys.argv[1]
+offset_file = transcript + ".stopoffset"
+start_line = 0
+if os.path.exists(offset_file):
+    try:
+        start_line = int(open(offset_file).read().strip())
+    except Exception:
+        start_line = 0
 input_tokens = cache_create = cache_read = output_tokens = 0
 model = ""
-with open(sys.argv[1]) as f:
-    for line in f:
-        try:
-            msg = json.loads(line)
-        except Exception:
-            continue
-        if msg.get("type") != "assistant":
-            continue
-        m = msg.get("message", {})
-        if not model:
-            model = m.get("model", "")
-        u = m.get("usage", {})
-        if not u:
-            continue
-        input_tokens += u.get("input_tokens", 0)
-        cache_create += u.get("cache_creation_input_tokens", 0)
-        cache_read += u.get("cache_read_input_tokens", 0)
-        output_tokens += u.get("output_tokens", 0)
+lines = open(transcript).readlines()
+for line in lines[start_line:]:
+    try:
+        msg = json.loads(line)
+    except Exception:
+        continue
+    if msg.get("type") != "assistant":
+        continue
+    m = msg.get("message", {})
+    if not model:
+        model = m.get("model", "")
+    u = m.get("usage", {})
+    if not u:
+        continue
+    input_tokens += u.get("input_tokens", 0)
+    cache_create += u.get("cache_creation_input_tokens", 0)
+    cache_read += u.get("cache_read_input_tokens", 0)
+    output_tokens += u.get("output_tokens", 0)
+# Save current line count so next stop only counts new lines
+try:
+    with open(offset_file, "w") as f:
+        f.write(str(len(lines)))
+except Exception:
+    pass
 total_input = input_tokens + cache_create + cache_read
 if total_input > 0 or output_tokens > 0:
     print(json.dumps({
