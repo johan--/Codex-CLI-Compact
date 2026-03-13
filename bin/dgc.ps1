@@ -354,6 +354,8 @@ try {
 
     if (-not $env:DG_DISABLE_TOKEN_COUNTER) {
         # Wrap entirely so token-counter failures never kill the main launcher.
+        # Use Continue so npm deprecation warnings on stderr don't become terminating errors.
+        $prevEAP = $ErrorActionPreference; $ErrorActionPreference = "Continue"
         try {
             # Remove from both project and user scope — the MCP is registered user-scope.
             Remove-ClaudeMcpSafe "token-counter"
@@ -390,7 +392,7 @@ try {
                     New-Item -ItemType Directory -Force -Path $tcDir | Out-Null
                     # Write without BOM (ASCII-safe JSON) so npm parses it correctly on PS5.
                     [System.IO.File]::WriteAllText((Join-Path $tcDir "package.json"), '{"name":"tc-host","version":"1.0.0","private":true}')
-                    $installExit = Invoke-NativeQuiet $npmCmd @("install", "--prefix", $tcDir, "--no-package-lock", "--no-fund", "token-counter-mcp@latest")
+                    $installExit = Invoke-NativeQuiet $npmCmd @("install", "--prefix", $tcDir, "--no-package-lock", "--no-fund", "--loglevel", "error", "token-counter-mcp@latest")
                     if ($installExit -ne 0) {
                         Write-Host "[$Tool] Token counter install failed (exit $installExit). Set DG_DISABLE_TOKEN_COUNTER=1 to silence."
                     }
@@ -425,6 +427,8 @@ try {
             }
         } catch {
             Write-Host "[$Tool] Token counter setup skipped: $($_.Exception.Message)"
+        } finally {
+            $ErrorActionPreference = $prevEAP
         }
     } else {
         Write-Host "[$Tool] Token counter disabled via DG_DISABLE_TOKEN_COUNTER=1"
