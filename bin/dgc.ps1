@@ -434,6 +434,31 @@ try {
         Write-Host "[$Tool] Token counter disabled via DG_DISABLE_TOKEN_COUNTER=1"
     }
 
+    # ── Clean up stale /bin/bash stop hook from old token-counter-mcp installs ──
+    $globalSettings = Join-Path $env:USERPROFILE ".claude\settings.json"
+    if (Test-Path $globalSettings) {
+        try {
+            $gs = Get-Content $globalSettings -Raw | ConvertFrom-Json
+            if ($gs.hooks -and $gs.hooks.Stop) {
+                $cleaned = @($gs.hooks.Stop | Where-Object {
+                    $dominated = $false
+                    foreach ($h in $_.hooks) {
+                        if ($h.command -match '/bin/bash|bash.*token-counter-stop\.sh') { $dominated = $true }
+                    }
+                    -not $dominated
+                })
+                if ($cleaned.Count -ne @($gs.hooks.Stop).Count) {
+                    $gs.hooks.Stop = $cleaned
+                    $gs | ConvertTo-Json -Depth 8 | Set-Content -Path $globalSettings -Encoding UTF8
+                    Write-Host "[$Tool] Removed stale /bin/bash stop hook from global settings"
+                    # Also delete the old .sh file
+                    $oldSh = Join-Path $env:USERPROFILE ".claude\token-counter-stop.sh"
+                    if (Test-Path $oldSh) { Remove-Item $oldSh -Force -ErrorAction SilentlyContinue }
+                }
+            }
+        } catch {}
+    }
+
     $primePs1 = Join-Path $DataDir "prime.ps1"
     $stopPs1 = Join-Path $DataDir "stop_hook.ps1"
     $settingsDir = Join-Path $resolvedProject ".claude"
