@@ -209,14 +209,18 @@ try {
                     @{ Primary = "$BaseUrl/bin/mcp_graph_server.py"; Fallback = "$R2/mcp_graph_server.py"; Out = (Join-Path $DG "mcp_graph_server.py") },
                     @{ Primary = "$BaseUrl/bin/graph_builder.py";    Fallback = "$R2/graph_builder.py";    Out = (Join-Path $DG "graph_builder.py") },
                     @{ Primary = "$BaseUrl/bin/dual_graph_launch.sh";Fallback = "$R2/dual_graph_launch.sh";Out = (Join-Path $DG "dual_graph_launch.sh") },
-                    @{ Primary = "$BaseUrl/bin/dgc.ps1";             Fallback = "";                        Out = (Join-Path $DG "dgc.ps1") },
-                    @{ Primary = "$BaseUrl/bin/dg.ps1";              Fallback = "";                        Out = (Join-Path $DG "dg.ps1") },
+                    @{ Primary = "$BaseUrl/bin/dgc.ps1";             Fallback = "$R2/dgc.ps1";            Out = (Join-Path $DG "dgc.ps1") },
+                    @{ Primary = "$BaseUrl/bin/dg.ps1";              Fallback = "$R2/dg.ps1";             Out = (Join-Path $DG "dg.ps1") },
                     @{ Primary = "$BaseUrl/bin/dgc.cmd";             Fallback = "$R2/dgc.cmd";            Out = (Join-Path $DG "dgc.cmd") },
-                    @{ Primary = "$BaseUrl/bin/dg.cmd";              Fallback = "$R2/dg.cmd";             Out = (Join-Path $DG "dg.cmd") },
-                    @{ Primary = "$BaseUrl/bin/version.txt";         Fallback = "$R2/version.txt";        Out = (Join-Path $DG "version.txt") }
+                    @{ Primary = "$BaseUrl/bin/dg.cmd";              Fallback = "$R2/dg.cmd";             Out = (Join-Path $DG "dg.cmd") }
                 )
                 foreach ($item in $downloads) {
                     [void](Download-File $item.Primary $item.Fallback $item.Out)
+                }
+                # Only stamp version.txt if dgc.ps1 was actually downloaded (avoids marking as updated when file download failed)
+                $dgcPs1 = Join-Path $DG "dgc.ps1"
+                if ((Test-Path $dgcPs1) -and (Get-Item $dgcPs1).Length -gt 1024) {
+                    [void](Download-File "$BaseUrl/bin/version.txt" "$R2/version.txt" (Join-Path $DG "version.txt"))
                 }
                 Write-Host "[$Tool] Updated to $remoteVer. Restarting..."
                 $updatedScript = Join-Path $DG "dgc.ps1"
@@ -289,6 +293,13 @@ try {
         } catch {}
         Remove-Item $portFile -Force -ErrorAction SilentlyContinue
     }
+
+    # Kill any orphaned MCP server processes left by previous failed runs.
+    try {
+        Get-NetTCPConnection -LocalPort (8080..8099) -State Listen -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty OwningProcess -Unique |
+            ForEach-Object { try { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } catch {} }
+    } catch {}
 
     $port = Get-FreePort
     Write-Host "[$Tool] Starting MCP server on port $port..."
