@@ -690,7 +690,10 @@ else
   claude mcp remove token-counter --scope user >/dev/null 2>&1 || true
   claude mcp remove token-counter >/dev/null 2>&1 || true
   claude mcp add --scope user token-counter -- npx -y token-counter-mcp >/dev/null 2>&1 || true
-  echo "[$TOOL_LABEL] Token counter -> http://localhost:8899 (global, npx token-counter-mcp)"
+  _TC_PORT_FILE="$HOME/.claude/token-counter/dashboard-port.txt"
+  _TC_PORT=8899
+  if [[ -f "$_TC_PORT_FILE" ]]; then _TC_PORT=$(cat "$_TC_PORT_FILE"); fi
+  echo "[$TOOL_LABEL] Token counter -> http://localhost:$_TC_PORT (global)"
   # ───────────────────────────────────────────────────────────────────────────
 fi
 
@@ -736,8 +739,10 @@ fi
 # ──────────────────────────────────────────────────────────────────────────────
 
 echo ""
-echo "[$TOOL_LABEL] 💬 Questions, bugs, or feedback? Join the community:"
-echo "[$TOOL_LABEL]    https://discord.gg/rxgVVgCh"
+echo "[$TOOL_LABEL] If you receive any errors:"
+echo "[$TOOL_LABEL]   1. Wait 5 minutes and run dgc again"
+echo "[$TOOL_LABEL]   2. Update Claude Code: npm install -g @anthropic-ai/claude-code"
+echo "[$TOOL_LABEL]   3. Join Discord for help: https://discord.gg/rxgVVgCh"
 echo ""
 echo "[$TOOL_LABEL] Starting $ASSISTANT..."
 echo ""

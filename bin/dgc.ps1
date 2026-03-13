@@ -406,7 +406,9 @@ try {
                 }
                 if ($tcMain -and (Test-Path $tcMain)) {
                     [void](Invoke-NativeQuiet "claude" @("mcp", "add", "--scope", "user", "token-counter", "--", $nodeCmd, $tcMain))
-                    Write-Host "[$Tool] Token counter registered (global)"
+                    $tcPortFile = Join-Path $env:USERPROFILE ".claude\token-counter\dashboard-port.txt"
+                    $tcPort = if (Test-Path $tcPortFile) { (Get-Content $tcPortFile -Raw).Trim() } else { "8899" }
+                    Write-Host "[$Tool] Token counter -> http://localhost:$tcPort (global)"
                 } else {
                     Write-Host "[$Tool] Token counter skipped (entry file not found). Set DG_DISABLE_TOKEN_COUNTER=1 to silence."
                 }
@@ -477,8 +479,10 @@ if ($transcript -and (Test-Path $transcript)) {
     Write-Host "[$Tool] Context hooks ready (SessionStart + PreCompact + Stop)"
 
     Write-Host ""
-    Write-Host "[$Tool] Questions, bugs, or feedback? Join the community:"
-    Write-Host "[$Tool]    https://discord.gg/rxgVVgCh"
+    Write-Host "[$Tool] If you receive any errors:"
+    Write-Host "[$Tool]   1. Wait 5 minutes and run dgc again"
+    Write-Host "[$Tool]   2. Update Claude Code: npm install -g @anthropic-ai/claude-code"
+    Write-Host "[$Tool]   3. Join Discord for help: https://discord.gg/rxgVVgCh"
     Write-Host ""
     Write-Host "[$Tool] Starting claude..."
     Write-Host ""
