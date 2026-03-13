@@ -230,6 +230,29 @@ try {
         Write-Host "[install] Added $INSTALL_DIR to PATH"
     }
 
+    # ── Install Claude Code if not present ─────────────────────────────────────
+    $step = "Checking Claude Code"
+    $claudeCmd = Get-Command claude -ErrorAction SilentlyContinue
+    if (-not $claudeCmd) {
+        $npmCmd = (Get-Command npm.cmd -ErrorAction SilentlyContinue).Source
+        if (-not $npmCmd) { $npmCmd = (Get-Command npm -ErrorAction SilentlyContinue).Source }
+        if ($npmCmd) {
+            Write-Host "[install] Installing Claude Code (npm install -g @anthropic-ai/claude-code)..."
+            & $npmCmd install -g "@anthropic-ai/claude-code" 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "[install] Claude Code installed successfully."
+            } else {
+                Write-Host "[install] Warning: Claude Code install failed. Install manually:"
+                Write-Host "[install]   npm install -g @anthropic-ai/claude-code"
+            }
+        } else {
+            Write-Host "[install] Warning: npm not found. Install Claude Code manually after installing Node.js:"
+            Write-Host "[install]   npm install -g @anthropic-ai/claude-code"
+        }
+    } else {
+        Write-Host "[install] Claude Code already installed."
+    }
+
     Write-Host ""
     Write-Host "[install] Done! Open a NEW terminal, then run:"
     Write-Host "  dgc `"C:\path\to\your\project`"   # Claude Code"
