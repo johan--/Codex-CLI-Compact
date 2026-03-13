@@ -647,14 +647,12 @@ try:
         f.write(str(len(lines)))
 except Exception:
     pass
-total_input = input_tokens + cache_create + cache_read
-if total_input > 0 or output_tokens > 0:
+if input_tokens > 0 or cache_create > 0 or cache_read > 0 or output_tokens > 0:
     print(json.dumps({
-        "input_tokens": total_input,
+        "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "cache_creation_input_tokens": cache_create,
         "cache_read_input_tokens": cache_read,
-        "raw_input_tokens": input_tokens,
         "model": model or "claude-sonnet-4-6",
         "description": "auto",
         "project": "$PROJECT",

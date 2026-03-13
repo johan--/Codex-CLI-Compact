@@ -511,15 +511,13 @@ if ($transcript -and (Test-Path $transcript)) {
         }
         # Save current line count so next stop only counts new lines
         $allLines.Count.ToString() | Set-Content -Path $offsetFile -Encoding UTF8 -ErrorAction SilentlyContinue
-        $totalInput = $inputTk + $cacheCreate + $cacheRead
-        if ($totalInput -gt 0 -or $outputTk -gt 0) {
+        if ($inputTk -gt 0 -or $cacheCreate -gt 0 -or $cacheRead -gt 0 -or $outputTk -gt 0) {
             if (-not $model) { $model = 'claude-sonnet-4-6' }
             $body = @{
-                input_tokens = $totalInput
+                input_tokens = $inputTk
                 output_tokens = $outputTk
                 cache_creation_input_tokens = $cacheCreate
                 cache_read_input_tokens = $cacheRead
-                raw_input_tokens = $inputTk
                 model = $model
                 description = "auto"
                 project = "__PROJECT__"

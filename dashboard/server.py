@@ -196,28 +196,20 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(HTTPStatus.BAD_REQUEST, "Invalid JSON")
             return
 
-        # Accept both old format (prompt_tokens/completion_tokens) and
-        # new format from Stop hook (input_tokens/output_tokens/cache breakdown).
-        input_tokens = int(body.get("input_tokens", 0))
+        # input_tokens = raw (non-cached) input. Cache sent separately.
+        raw_input = int(body.get("input_tokens", 0))
         output_tokens = int(body.get("output_tokens", 0))
         cache_create = int(body.get("cache_creation_input_tokens", 0))
         cache_read = int(body.get("cache_read_input_tokens", 0))
-        raw_input = int(body.get("raw_input_tokens", 0))
-        # If raw_input_tokens not provided, derive from total - cache
-        if raw_input == 0 and input_tokens > 0:
-            raw_input = max(0, input_tokens - cache_create - cache_read)
 
         # Backwards compat: old format used prompt_tokens/completion_tokens
-        if not input_tokens and not output_tokens:
-            input_tokens = int(body.get("prompt_tokens", 0)) or int(body.get("prompt_chars", 0)) // 4
+        if not raw_input and not output_tokens:
+            raw_input = int(body.get("prompt_tokens", 0)) or int(body.get("prompt_chars", 0)) // 4
             output_tokens = int(body.get("completion_tokens", 0))
 
-        total = input_tokens + output_tokens
-
-        # Cost calculation (Sonnet 4.6 pricing as default)
+        # Cost calculation
         model = str(body.get("model", "unknown"))
         is_opus = "opus" in model.lower()
-        # Pricing per token
         if is_opus:
             price_raw = 15.0 / 1_000_000
             price_cc = 18.75 / 1_000_000
@@ -234,12 +226,11 @@ class Handler(BaseHTTPRequestHandler):
         event = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "model": model,
-            "input_tokens": input_tokens,
+            "input_tokens": raw_input,
             "output_tokens": output_tokens,
             "cache_creation_input_tokens": cache_create,
             "cache_read_input_tokens": cache_read,
-            "raw_input_tokens": raw_input,
-            "total_tokens": total,
+            "total_tokens": raw_input + cache_create + cache_read + output_tokens,
             "cost_usd": round(cost_usd, 6),
             "project": str(body.get("project", "")),
             "description": str(body.get("description", body.get("notes", ""))),
