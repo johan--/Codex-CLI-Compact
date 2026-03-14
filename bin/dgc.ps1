@@ -176,9 +176,162 @@ function Remove-ClaudeMcpSafe([string]$Name, [string]$Scope = "") {
     }
 }
 
+function Find-Python3 {
+    # 1. Try 'python3' (works on some Windows setups with alias)
+    try {
+        $p = (Get-Command python3 -ErrorAction SilentlyContinue).Source
+        if ($p) {
+            $ver = & python3 -c "import sys; print(sys.version_info >= (3, 10))" 2>$null
+            if ($ver -eq "True") { return $p }
+        }
+    } catch {}
+
+    # 2. Try 'python' (standard Windows name)
+    try {
+        $p = (Get-Command python -ErrorAction SilentlyContinue).Source
+        if ($p -and $p -notmatch 'WindowsApps') {
+            $ver = & python -c "import sys; print(sys.version_info >= (3, 10))" 2>$null
+            if ($ver -eq "True") { return $p }
+        }
+    } catch {}
+
+    # 3. Try 'py' launcher (Windows Python Launcher)
+    try {
+        $p = (Get-Command py -ErrorAction SilentlyContinue).Source
+        if ($p) {
+            $ver = & py -3 -c "import sys; print(sys.version_info >= (3, 10))" 2>$null
+            if ($ver -eq "True") { return "py -3" }
+        }
+    } catch {}
+
+    # 4. Common install paths
+    $paths = @(
+        "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python310\python.exe",
+        "C:\Python312\python.exe",
+        "C:\Python311\python.exe",
+        "C:\Python310\python.exe"
+    )
+    foreach ($p in $paths) {
+        if (Test-Path $p) {
+            try {
+                $ver = & $p -c "import sys; print(sys.version_info >= (3, 10))" 2>$null
+                if ($ver -eq "True") { return $p }
+            } catch {}
+        }
+    }
+
+    # 5. Conda
+    foreach ($conda in @("$env:USERPROFILE\miniconda3\python.exe", "$env:USERPROFILE\anaconda3\python.exe",
+                         "C:\ProgramData\miniconda3\python.exe", "C:\ProgramData\anaconda3\python.exe")) {
+        if (Test-Path $conda) {
+            try {
+                $ver = & $conda -c "import sys; print(sys.version_info >= (3, 10))" 2>$null
+                if ($ver -eq "True") { return $conda }
+            } catch {}
+        }
+    }
+
+    return $null
+}
+
+function Create-Venv([string]$PyExe, [string]$VenvDir) {
+    # Handle 'py -3' as a special case
+    if ($PyExe -eq "py -3") {
+        # Attempt 1: py -3 -m venv
+        $exit = Invoke-NativeQuiet "py" @("-3", "-m", "venv", $VenvDir)
+        if ($exit -eq 0 -and (Test-Path (Join-Path $VenvDir "Scripts\python.exe"))) { return $true }
+        Remove-Item $VenvDir -Recurse -Force -ErrorAction SilentlyContinue
+
+        # Attempt 2: py -3 -m venv --without-pip, then bootstrap
+        $exit = Invoke-NativeQuiet "py" @("-3", "-m", "venv", "--without-pip", $VenvDir)
+        if ($exit -eq 0 -and (Test-Path (Join-Path $VenvDir "Scripts\python.exe"))) {
+            try {
+                $getPip = Join-Path $env:TEMP "get-pip.py"
+                Invoke-WebRequest "https://bootstrap.pypa.io/get-pip.py" -OutFile $getPip -UseBasicParsing -TimeoutSec 30
+                & (Join-Path $VenvDir "Scripts\python.exe") $getPip 2>$null
+                if (Test-Path (Join-Path $VenvDir "Scripts\pip.exe")) { return $true }
+            } catch {}
+        }
+        Remove-Item $VenvDir -Recurse -Force -ErrorAction SilentlyContinue
+        return $false
+    }
+
+    # Attempt 1: standard venv
+    $exit = Invoke-NativeQuiet $PyExe @("-m", "venv", $VenvDir)
+    if ($exit -eq 0 -and (Test-Path (Join-Path $VenvDir "Scripts\python.exe"))) { return $true }
+    Remove-Item $VenvDir -Recurse -Force -ErrorAction SilentlyContinue
+
+    # Attempt 2: venv --without-pip + get-pip.py bootstrap
+    $exit = Invoke-NativeQuiet $PyExe @("-m", "venv", "--without-pip", $VenvDir)
+    if ($exit -eq 0 -and (Test-Path (Join-Path $VenvDir "Scripts\python.exe"))) {
+        try {
+            Write-Host "[$Tool] Bootstrapping pip via get-pip.py..."
+            $getPip = Join-Path $env:TEMP "get-pip.py"
+            Invoke-WebRequest "https://bootstrap.pypa.io/get-pip.py" -OutFile $getPip -UseBasicParsing -TimeoutSec 30
+            & (Join-Path $VenvDir "Scripts\python.exe") $getPip 2>$null
+            if (Test-Path (Join-Path $VenvDir "Scripts\pip.exe")) { return $true }
+        } catch {}
+    }
+    Remove-Item $VenvDir -Recurse -Force -ErrorAction SilentlyContinue
+
+    # Attempt 3: virtualenv
+    $exit = Invoke-NativeQuiet $PyExe @("-m", "virtualenv", $VenvDir)
+    if ($exit -eq 0 -and (Test-Path (Join-Path $VenvDir "Scripts\python.exe"))) { return $true }
+    Remove-Item $VenvDir -Recurse -Force -ErrorAction SilentlyContinue
+
+    # Attempt 4: install virtualenv then use it
+    Invoke-NativeQuiet $PyExe @("-m", "pip", "install", "--user", "virtualenv") | Out-Null
+    $exit = Invoke-NativeQuiet $PyExe @("-m", "virtualenv", $VenvDir)
+    if ($exit -eq 0 -and (Test-Path (Join-Path $VenvDir "Scripts\python.exe"))) { return $true }
+    Remove-Item $VenvDir -Recurse -Force -ErrorAction SilentlyContinue
+
+    return $false
+}
+
 try {
     if (-not (Test-Path $DG)) { New-Item -ItemType Directory -Force -Path $DG | Out-Null }
-    if (-not (Test-Path $Python)) { throw "Python environment not found. Please reinstall dual-graph once." }
+
+    # ── Bulletproof Python venv setup ──
+    if (-not (Test-Path $Python)) {
+        Write-Host "[$Tool] Python venv not found, setting up..."
+        $foundPy = Find-Python3
+        if (-not $foundPy) {
+            $msg = "No Python 3.10+ found. Install from https://python.org/downloads"
+            Write-Host "[$Tool] ERROR: $msg"
+            Write-Host "[$Tool] After installing, close and reopen your terminal, then run dgc again."
+            Send-CliError "Checking prerequisites" $msg
+            throw $msg
+        }
+        $pyVer = if ($foundPy -eq "py -3") { & py -3 --version 2>$null } else { & $foundPy --version 2>$null }
+        Write-Host "[$Tool] Found $pyVer at $foundPy"
+
+        $venvDir = Join-Path $DG "venv"
+        if (Create-Venv $foundPy $venvDir) {
+            Write-Host "[$Tool] Venv created."
+        } else {
+            $msg = "All venv creation methods failed (python=$foundPy). Install Python from https://python.org/downloads"
+            Write-Host "[$Tool] ERROR: $msg"
+            Send-CliError "Preparing Python environment" $msg
+            throw $msg
+        }
+
+        Write-Host "[$Tool] Installing Python dependencies..."
+        $pip = Join-Path $venvDir "Scripts\pip.exe"
+        $pipExit = Invoke-NativeQuiet $pip @("install", "mcp>=1.3.0", "uvicorn", "anyio", "starlette", "--quiet")
+        if ($pipExit -ne 0) {
+            # Retry without cache
+            Write-Host "[$Tool] Retrying pip install..."
+            $pipExit = Invoke-NativeQuiet $pip @("install", "mcp>=1.3.0", "uvicorn", "anyio", "starlette", "--quiet", "--no-cache-dir")
+        }
+        if ($pipExit -ne 0) {
+            $msg = "pip install failed (exit $pipExit)"
+            Send-CliError "Preparing Python environment" $msg
+            throw $msg
+        }
+        Write-Host "[$Tool] Dependencies installed."
+    }
 
     $resolvedProject = (Resolve-Path -LiteralPath $ProjectPath).Path
 

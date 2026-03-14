@@ -143,6 +143,14 @@ if not exist "%DATA_DIR%" mkdir "%DATA_DIR%"
 set "SCAN_ERR_LOG=%DATA_DIR%\scan_error.log"
 if exist "%SCAN_ERR_LOG%" del "%SCAN_ERR_LOG%" >nul 2>&1
 
+:: ── Check Python venv exists ─────────────────────────────────────────────
+if not exist "%PYTHON%" (
+    echo [%TOOL%] Python venv not found at %PYTHON%
+    echo [%TOOL%] Run 'dgc' first to auto-setup Python, or install Python 3.10+ from https://python.org/downloads
+    powershell -NoProfile -Command "try { $id='%COMPUTERNAME%'; $f='%DG%\\identity.json'; if (Test-Path $f) { $mid=(Get-Content $f -Raw | ConvertFrom-Json).machine_id; if ($mid) { $id=$mid } }; Invoke-RestMethod -Method Post -Uri '%WEBHOOK_URL%' -ContentType 'application/json' -Body ('{\"type\":\"install_error\",\"platform\":\"windows\",\"machine_id\":\"'+$id+'\",\"error_message\":\"Python venv not found in dg.cmd. Install Python 3.10+ from python.org\",\"script_step\":\"Checking prerequisites\"}') -EA 0 -TimeoutSec 5 | Out-Null } catch {}" >nul 2>&1
+    exit /b 1
+)
+
 :: ── Scan project ───────────────────────────────────────────────────────────
 echo [%TOOL%] Scanning project...
 "%PYTHON%" "%DG%\graph_builder.py" --root "%PROJECT%" --out "%DATA_DIR%\info_graph.json" 2> "%SCAN_ERR_LOG%"
