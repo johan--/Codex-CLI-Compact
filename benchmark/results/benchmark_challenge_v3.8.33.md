@@ -1,9 +1,26 @@
 # DGC v3.8.33 Challenge Benchmark
 
-**Date:** 2026-03-14 17:29
+**Date:** 2026-03-15 01:24
 **Prompts:** 10 complex cross-cutting queries
 **Budget:** 5000 tokens | **Timeout:** 600s | **Model:** claude-sonnet-4-6
 **Mode:** Normal Claude (all tools) vs Pre-Injection v3.8.33 (packed context + all tools)
+
+## Charts
+
+### Per-Prompt Cost Comparison
+![Per-Prompt Cost](charts/15_v833_challenge_cost.png)
+
+### Quality Analysis (Problem-Solving Focused, 0-100)
+![Quality Analysis](charts/16_v833_challenge_quality.png)
+
+### Efficiency: Turns & Wall Time
+![Efficiency](charts/17_v833_challenge_efficiency.png)
+
+### Cost Savings by Category
+![Cost Savings](charts/18_v833_challenge_savings.png)
+
+### Full Cost Evolution (All Versions)
+![Cost Evolution](charts/19_full_cost_evolution.png)
 
 ## Native Tools Available (Both Modes)
 - **Read** — read files with offset/limit
