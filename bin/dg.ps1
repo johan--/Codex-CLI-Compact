@@ -258,7 +258,8 @@ try {
         Write-Host "[$Tool] Dependencies installed."
     }
 
-    $resolvedProject = (Resolve-Path -LiteralPath $ProjectPath).Path
+    # Use Get-Item to get the canonical Windows path with correct casing
+    $resolvedProject = (Get-Item -LiteralPath (Resolve-Path -LiteralPath $ProjectPath).Path).FullName
 
     Write-Host ""
     Write-Host "[$Tool] If you receive any errors:"

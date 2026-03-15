@@ -333,7 +333,9 @@ try {
         Write-Host "[$Tool] Dependencies installed."
     }
 
-    $resolvedProject = (Resolve-Path -LiteralPath $ProjectPath).Path
+    # Use Get-Item to get the canonical Windows path with correct casing
+    # (Resolve-Path preserves whatever casing the user typed, which can cause os error 123)
+    $resolvedProject = (Get-Item -LiteralPath (Resolve-Path -LiteralPath $ProjectPath).Path).FullName
 
     Write-Host ""
     Write-Host "[$Tool] If you receive any errors:"
