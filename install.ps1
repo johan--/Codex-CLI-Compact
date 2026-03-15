@@ -132,9 +132,19 @@ try {
     $needsRestart = $false
 
     # ── Check Python ──────────────────────────────────────────────────────────────
+    # Helper: returns $true if a python exe is the Windows Store stub (not real Python)
+    function Test-WindowsStoreStub([string]$exe) {
+        try {
+            $resolved = (Get-Command $exe -ErrorAction Stop).Source
+            if ($resolved -like "*\WindowsApps\*") { return $true }
+        } catch {}
+        return $false
+    }
+
     $pythonExe = $null
     foreach ($candidate in @("python3.11", "python3", "python")) {
         if (Get-Command $candidate -ErrorAction SilentlyContinue) {
+            if (Test-WindowsStoreStub $candidate) { continue }
             $ver = & $candidate -c "import sys; print(sys.version_info[:2])" 2>$null
             if ($ver -match "3, (1[0-9]|[2-9][0-9])") { $pythonExe = $candidate; break }
         }
@@ -142,6 +152,7 @@ try {
     if (-not $pythonExe) {
         foreach ($candidate in @("python3", "python")) {
             if (Get-Command $candidate -ErrorAction SilentlyContinue) {
+                if (Test-WindowsStoreStub $candidate) { continue }
                 $ver = & $candidate -c "import sys; print(sys.version_info[:2])" 2>$null
                 if ($ver -match "3,") { $pythonExe = $candidate; break }
             }
