@@ -294,7 +294,16 @@ try {
     if (-not (Test-Path $DG)) { New-Item -ItemType Directory -Force -Path $DG | Out-Null }
 
     # -- Bulletproof Python venv setup --
-    if (-not (Test-Path $Python)) {
+    $venvCfg = Join-Path $DG "venv\pyvenv.cfg"
+    $needsVenv = (-not (Test-Path $Python)) -or (-not (Test-Path $venvCfg))
+    if ($needsVenv -and (Test-Path (Join-Path $DG "venv"))) {
+        Write-Host "[$Tool] Broken venv detected (missing pyvenv.cfg). Rebuilding..."
+        cmd /c "rmdir /s /q `"$(Join-Path $DG "venv")`"" 2>$null
+        if (Test-Path (Join-Path $DG "venv")) {
+            Remove-Item (Join-Path $DG "venv") -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+    if ($needsVenv) {
         Write-Host "[$Tool] Python venv not found, setting up..."
         $foundPy = Find-Python3
         if (-not $foundPy) {
