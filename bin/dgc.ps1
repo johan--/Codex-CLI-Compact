@@ -298,9 +298,22 @@ try {
     $needsVenv = (-not (Test-Path $Python)) -or (-not (Test-Path $venvCfg))
     if ($needsVenv -and (Test-Path (Join-Path $DG "venv"))) {
         Write-Host "[$Tool] Broken venv detected (missing pyvenv.cfg). Rebuilding..."
-        cmd /c "rmdir /s /q `"$(Join-Path $DG "venv")`"" 2>$null
-        if (Test-Path (Join-Path $DG "venv")) {
-            Remove-Item (Join-Path $DG "venv") -Recurse -Force -ErrorAction SilentlyContinue
+        $oldVenv = Join-Path $DG "venv"
+        $tombstone = Join-Path $DG "venv._broken_$(Get-Date -Format 'yyyyMMddHHmmss')"
+        # Rename out of the way first — works even if .pyd files are locked
+        try { Rename-Item $oldVenv $tombstone -Force -ErrorAction Stop } catch {
+            # Rename failed too — try killing python processes from this venv
+            Get-Process python*, py* -ErrorAction SilentlyContinue |
+                Where-Object { try { $_.Path -like "$oldVenv*" } catch { $false } } |
+                Stop-Process -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 1
+            try { Rename-Item $oldVenv $tombstone -Force -ErrorAction Stop } catch {
+                cmd /c "rmdir /s /q `"$oldVenv`"" 2>$null
+            }
+        }
+        # Clean up tombstone in background (best effort)
+        if (Test-Path $tombstone) {
+            Start-Job -ScriptBlock { cmd /c "rmdir /s /q `"$using:tombstone`"" } -ErrorAction SilentlyContinue | Out-Null
         }
     }
     if ($needsVenv) {
