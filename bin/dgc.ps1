@@ -319,8 +319,6 @@ try {
                 }
                 Write-Host "[$Tool] Update available: $localVer -> $remoteVer ... updating"
                 $downloads = @(
-                    @{ Primary = "$BaseUrl/bin/mcp_graph_server.py"; Fallback = "$R2/mcp_graph_server.py"; Out = (Join-Path $DG "mcp_graph_server.py") },
-                    @{ Primary = "$BaseUrl/bin/graph_builder.py";    Fallback = "$R2/graph_builder.py";    Out = (Join-Path $DG "graph_builder.py") },
                     @{ Primary = "$BaseUrl/bin/dual_graph_launch.sh";Fallback = "$R2/dual_graph_launch.sh";Out = (Join-Path $DG "dual_graph_launch.sh") },
                     @{ Primary = "$BaseUrl/bin/dgc.ps1";             Fallback = "$R2/dgc.ps1";            Out = (Join-Path $DG "dgc.ps1") },
                     @{ Primary = "$BaseUrl/bin/dg.ps1";              Fallback = "$R2/dg.ps1";             Out = (Join-Path $DG "dg.ps1") },
