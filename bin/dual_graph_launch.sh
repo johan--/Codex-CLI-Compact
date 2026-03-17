@@ -251,6 +251,10 @@ if [[ -n "$_REMOTE_VER" ]] && _version_gt "$_REMOTE_VER" "$_LOCAL_VER"; then
     || curl -fsSL "$_R2/dual_graph_launch.sh" -o "$SCRIPT_DIR/dual_graph_launch.sh"
   chmod +x "$SCRIPT_DIR/dual_graph_launch.sh"
   echo "$_REMOTE_VER" > "$SCRIPT_DIR/version.txt"
+  # Upgrade graperoot so venv gets latest mcp_graph_server + compiled modules
+  if [[ -x "$SCRIPT_DIR/venv/bin/pip" ]]; then
+    "$SCRIPT_DIR/venv/bin/pip" install graperoot --upgrade --quiet 2>/dev/null || true
+  fi
   echo "[$TOOL_LABEL] Updated to $_REMOTE_VER. Restarting..."
   EXEC_ARGS=("$SCRIPT_DIR/dual_graph_launch.sh" "$ASSISTANT" "$PROJECT")
   [[ -n "$PROMPT" ]] && EXEC_ARGS+=("$PROMPT")

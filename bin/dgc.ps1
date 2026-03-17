@@ -332,6 +332,9 @@ try {
                 if ((Test-Path $dgcPs1) -and (Get-Item $dgcPs1).Length -gt 1024) {
                     [void](Download-File "$BaseUrl/bin/version.txt" "$R2/version.txt" (Join-Path $DG "version.txt"))
                 }
+                # Upgrade graperoot so venv gets latest mcp_graph_server + compiled modules
+                $venvPip = Join-Path $DG "venv\Scripts\pip.exe"
+                if (Test-Path $venvPip) { Invoke-NativeQuiet $venvPip @("install", "graperoot", "--upgrade", "--quiet") | Out-Null }
                 Write-Host "[$Tool] Updated to $remoteVer. Restarting..."
                 $updatedScript = Join-Path $DG "dgc.ps1"
                 if (Test-Path $updatedScript) { & $updatedScript $ProjectPath; exit $LASTEXITCODE }
