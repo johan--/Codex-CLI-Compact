@@ -165,13 +165,8 @@ try {
                 return
             }
 
-            Write-Host "[install] Existing venv is missing pip. Trying to repair it..."
-            Invoke-Native { & $venvPython -m ensurepip --upgrade } | Out-Null
-            Invoke-Native { & $venvPython -m pip --version } | Out-Null
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host "[install] Repaired existing Python venv."
-                return
-            }
+            # pip is missing — venv is in bad shape; fall through to recreate it fresh
+            Write-Host "[install] Existing venv is missing pip — recreating it..."
         }
 
         # Remove any existing (broken or partial) venv before creating fresh.
