@@ -449,8 +449,8 @@ try {
     # Auto-install compiled graperoot package (silent fallback to .py if it fails)
     $grapeOk = $false
     $grapeBuilderExe = Join-Path $VenvBin "graph-builder.exe"
-    if ((Invoke-NativeQuiet $Python @("-c", "import graperoot")) -eq 0) {
-        # Module is importable — but also verify graph-builder.exe exists.
+    if ((Invoke-NativeQuiet $Python @("-c", "import graperoot.graph_builder")) -eq 0) {
+        # graph_builder submodule is importable — also verify graph-builder.exe exists.
         # A partial pip upgrade deletes graph-builder.exe first, then fails on the locked
         # mcp-graph-server.exe, leaving graperoot importable but graph-builder.exe missing.
         if (Test-Path $grapeBuilderExe) {
@@ -458,6 +458,9 @@ try {
         } else {
             Write-Host "[$Tool] graperoot partially installed (graph-builder.exe missing) -- reinstalling..."
         }
+    } elseif ((Invoke-NativeQuiet $Python @("-c", "import graperoot")) -eq 0) {
+        # graperoot imports but graph_builder submodule is missing (broken sdist install)
+        Write-Host "[$Tool] graperoot.graph_builder missing -- upgrading graperoot..."
     }
     if (-not $grapeOk) {
         if ((Invoke-NativeQuiet $pip @("install", "graperoot", "--upgrade", "--quiet")) -eq 0) {
