@@ -113,6 +113,21 @@ try {
             }
         }
 
+        # Kill any processes that might be holding venv files open (mcp-graph-server, graph-builder, etc.)
+        # Without this, locked DLLs prevent both rename-then-delete and --clear from working.
+        try {
+            Get-Process | Where-Object {
+                try { $_.Path -and $_.Path.StartsWith($INSTALL_DIR) } catch { $false }
+            } | ForEach-Object {
+                try { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } catch {}
+            }
+            # Also kill any python processes using our venv (by command line path)
+            Get-WmiObject Win32_Process -Filter "Name='python.exe' OR Name='pythonw.exe'" -ErrorAction SilentlyContinue |
+                Where-Object { $_.CommandLine -and $_.CommandLine -like "*$INSTALL_DIR*" } |
+                ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }
+            Start-Sleep -Milliseconds 500
+        } catch {}
+
         # Remove any existing (broken or partial) venv before creating fresh.
         # Use rename-then-delete so locked files don't block the new venv.
         if (Test-Path $venvDir) {
