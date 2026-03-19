@@ -110,10 +110,39 @@ If `pyproject.toml` or any Core source files changed:
 
 ```bash
 cd ~/Documents/Open\ source/Claude-CLI-Compact-core
-# build and publish (project-specific build command)
+python3 -m build --sdist
+python3 -m twine upload dist/graperoot-X.Y.Z.tar.gz
 ```
 
+Requires `twine` and a configured PyPI token (`~/.pypirc` or environment variable `TWINE_PASSWORD`).
+
 Users get the new graperoot automatically — `dgc.ps1` runs `pip install graperoot --upgrade` on self-update.
+
+### 10. Sync to Cloudflare R2 (if GitHub Actions minutes are exhausted)
+
+GitHub Actions normally syncs Core to R2 automatically via `sync-r2.yml`. If that workflow fails (budget issue), run manually:
+
+```bash
+cd ~/Documents/Open\ source/Claude-CLI-Compact-core
+AWS_ACCESS_KEY_ID="<R2_ACCESS_KEY_ID>" \
+AWS_SECRET_ACCESS_KEY="<R2_SECRET_ACCESS_KEY>" \
+AWS_DEFAULT_REGION="auto" \
+aws s3 sync . s3://dual-graph-core/ \
+  --endpoint-url https://612010d26d6532d6f2eae623a776a42b.r2.cloudflarestorage.com \
+  --exclude ".git/*" \
+  --exclude ".github/*" \
+  --exclude ".gitignore" \
+  --cache-control "no-store, max-age=0" \
+  --exact-timestamps
+```
+
+**Getting R2 credentials:**
+1. Cloudflare Dashboard → R2 → **Manage R2 API Tokens**
+2. Create/roll token with **Object Read & Write** on `dual-graph-core`
+3. Copy **Access Key ID** and **Secret Access Key**
+4. Account ID is always: `612010d26d6532d6f2eae623a776a42b`
+
+Requires `awscli`: `pip install awscli --break-system-packages`
 
 ## Common mistakes
 
