@@ -427,18 +427,24 @@ try {
     # pip upgrade replaces graph-builder.exe and mcp-graph-server.exe — if mcp-graph-server.exe
     # is still running, pip deletes graph-builder.exe (step 1) then hits WinError 32 on the
     # locked mcp-graph-server.exe (step 2), leaving graperoot half-uninstalled.
+    # Use taskkill /F — it kills processes from other terminal sessions where Stop-Process
+    # gets "Access Denied" because it only works on processes owned by the current session.
     $pidFile = Join-Path $DG "mcp_server.pid"
     $portFile = Join-Path $DG "mcp_port"
     if (Test-Path $pidFile) {
         try { Stop-Process -Id ([int](Get-Content $pidFile -Raw)) -Force -ErrorAction SilentlyContinue } catch {}
         Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
     }
+    # taskkill /F works across sessions; Stop-Process is a fallback for non-Windows
+    try { & taskkill /F /IM "mcp-graph-server.exe" /T 2>$null } catch {}
+    try { & taskkill /F /IM "graph-builder.exe" /T 2>$null } catch {}
+    # Also kill by port (catches renamed or custom server processes)
     try {
         Get-NetTCPConnection -LocalPort (8080..8099) -State Listen -ErrorAction SilentlyContinue |
             Select-Object -ExpandProperty OwningProcess -Unique |
             ForEach-Object { try { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } catch {} }
     } catch {}
-    Start-Sleep -Milliseconds 300
+    Start-Sleep -Milliseconds 500
 
     # Auto-install compiled graperoot package (silent fallback to .py if it fails)
     $grapeOk = $false
@@ -583,7 +589,9 @@ try {
         Remove-Item $portFile -Force -ErrorAction SilentlyContinue
     }
 
-    # Kill any orphaned MCP server processes left by previous failed runs.
+    # Kill any orphaned MCP server processes left by previous sessions.
+    # taskkill /F works across terminal sessions; Stop-Process only works within same session.
+    try { & taskkill /F /IM "mcp-graph-server.exe" /T 2>$null } catch {}
     try {
         Get-NetTCPConnection -LocalPort (8080..8099) -State Listen -ErrorAction SilentlyContinue |
             Select-Object -ExpandProperty OwningProcess -Unique |
