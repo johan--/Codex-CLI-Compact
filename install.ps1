@@ -493,13 +493,17 @@ try {
         [Environment]::SetEnvironmentVariable("PATH", "$userPath;$INSTALL_DIR", "User")
         Write-Host "[install] Added $INSTALL_DIR to PATH"
     }
+    # Also refresh current session PATH so dgc works immediately without reopening terminal
+    if ($env:PATH -notlike "*$INSTALL_DIR*") {
+        $env:PATH = "$env:PATH;$INSTALL_DIR"
+    }
 
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Green
     Write-Host "  Installation complete!" -ForegroundColor Green
     Write-Host "========================================" -ForegroundColor Green
     Write-Host ""
-    Write-Host "  Open a NEW terminal, then run:" -ForegroundColor White
+    Write-Host "  Run now in this terminal:" -ForegroundColor White
     Write-Host "    dgc `"C:\path\to\your\project`"   # Claude Code" -ForegroundColor White
     Write-Host "    dg  `"C:\path\to\your\project`"   # Codex CLI" -ForegroundColor White
     Write-Host ""
