@@ -423,13 +423,39 @@ try {
     $pip = Join-Path $DG "venv\Scripts\pip.exe"
     $VenvBin = Join-Path $DG "venv\Scripts"
 
+    # Kill any previous MCP server BEFORE the graperoot upgrade.
+    # pip upgrade replaces graph-builder.exe and mcp-graph-server.exe — if mcp-graph-server.exe
+    # is still running, pip deletes graph-builder.exe (step 1) then hits WinError 32 on the
+    # locked mcp-graph-server.exe (step 2), leaving graperoot half-uninstalled.
+    $pidFile = Join-Path $DG "mcp_server.pid"
+    $portFile = Join-Path $DG "mcp_port"
+    if (Test-Path $pidFile) {
+        try { Stop-Process -Id ([int](Get-Content $pidFile -Raw)) -Force -ErrorAction SilentlyContinue } catch {}
+        Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
+    }
+    try {
+        Get-NetTCPConnection -LocalPort (8080..8099) -State Listen -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty OwningProcess -Unique |
+            ForEach-Object { try { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } catch {} }
+    } catch {}
+    Start-Sleep -Milliseconds 300
+
     # Auto-install compiled graperoot package (silent fallback to .py if it fails)
     $grapeOk = $false
+    $grapeBuilderExe = Join-Path $VenvBin "graph-builder.exe"
     if ((Invoke-NativeQuiet $Python @("-c", "import graperoot")) -eq 0) {
-        $grapeOk = $true
-    } else {
-        if ((Invoke-NativeQuiet $pip @("install", "graperoot", "--upgrade", "--quiet")) -eq 0) {
+        # Module is importable — but also verify graph-builder.exe exists.
+        # A partial pip upgrade deletes graph-builder.exe first, then fails on the locked
+        # mcp-graph-server.exe, leaving graperoot importable but graph-builder.exe missing.
+        if (Test-Path $grapeBuilderExe) {
             $grapeOk = $true
+        } else {
+            Write-Host "[$Tool] graperoot partially installed (graph-builder.exe missing) -- reinstalling..."
+        }
+    }
+    if (-not $grapeOk) {
+        if ((Invoke-NativeQuiet $pip @("install", "graperoot", "--upgrade", "--quiet")) -eq 0) {
+            $grapeOk = (Test-Path $grapeBuilderExe)
         }
     }
     # Safety net: if graperoot still missing AND .py fallback files are gone, force reinstall
