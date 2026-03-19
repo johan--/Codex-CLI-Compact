@@ -94,9 +94,9 @@ try {
         $venvPython = Join-Path $venvDir "Scripts\python.exe"
         $venvCfg = Join-Path $venvDir "pyvenv.cfg"
 
-        # Kill any processes holding venv files open FIRST — before any checks or early returns.
-        # Locked DLLs (e.g. pywintypes311.dll) cause WinError 5 on pip install even when the
-        # venv looks healthy. Must kill before probing, not just before removing.
+        # Step 1: Kill all processes using our install dir BEFORE touching the venv.
+        # pywin32 DLLs (pywintypes311.dll) get locked as soon as any process in the
+        # venv loads them. Killing first ensures they are unlocked for uninstall/removal.
         try {
             Get-Process | Where-Object {
                 try { $_.Path -and $_.Path.StartsWith($InstallDir) } catch { $false }
@@ -109,9 +109,25 @@ try {
             Start-Sleep -Milliseconds 500
         } catch {}
 
-        # Only probe the existing venv if it looks structurally complete.
-        # Checking pyvenv.cfg FIRST avoids running a broken python.exe
-        # (which would lock files and prevent cleanup on Windows).
+        # Step 2: If pywin32 is present in the venv, uninstall it now while the DLL is unlocked.
+        # pywin32 got into venvs from a previous installer version; we don't need it.
+        # If uninstall fails (still locked), fall through to venv recreation below.
+        $sitePkgs = Join-Path $venvDir "Lib\site-packages"
+        if (Test-Path (Join-Path $sitePkgs "pywin32.pth")) {
+            Write-Host "[install] Removing pywin32 (not needed, causes WinError 5 on reinstall)..."
+            & $venvPython -m pip uninstall pywin32 pywin32-ctypes -y 2>$null
+            if ($LASTEXITCODE -ne 0) {
+                # Uninstall failed — DLL still locked. Force-recreate the venv.
+                Write-Host "[install] pywin32 uninstall failed (DLL locked). Recreating venv..."
+                if (Test-Path $venvDir) {
+                    $tombstone = "$venvDir._pywin32_$(Get-Date -Format 'yyyyMMddHHmmss')"
+                    try { Rename-Item $venvDir $tombstone -Force -ErrorAction Stop } catch {}
+                    try { Remove-Item $tombstone -Recurse -Force -ErrorAction SilentlyContinue } catch {}
+                }
+            }
+        }
+
+        # Step 3: Probe the existing venv — reuse only if structurally complete and pip works.
         if ((Test-Path $venvPython) -and (Test-Path $venvCfg)) {
             Invoke-Native { & $venvPython -m pip --version } | Out-Null
             if ($LASTEXITCODE -eq 0) {
@@ -417,18 +433,13 @@ try {
     Write-Host "[install] Installing Python dependencies..."
     $venvPy = "$INSTALL_DIR\venv\Scripts\python.exe"
     & $venvPy -m pip install --upgrade pip --quiet
-    $pipOut = & $venvPy -m pip install "mcp>=1.3.0" uvicorn anyio starlette --quiet 2>&1 | Out-String
-    if ($LASTEXITCODE -ne 0 -or $pipOut -match 'WinError 5|Access is denied') {
-        # Locked DLLs (e.g. pywin32) — kill processes and force-reinstall without them
-        Write-Host "[install] pip install hit locked files. Killing processes and retrying..."
-        try {
-            Get-WmiObject Win32_Process -Filter "Name='python.exe' OR Name='pythonw.exe'" -ErrorAction SilentlyContinue |
-                Where-Object { $_.CommandLine -and $_.CommandLine -like "*$INSTALL_DIR*" } |
-                ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }
-            Start-Sleep -Milliseconds 800
-        } catch {}
-        & $venvPy -m pip install --force-reinstall "mcp>=1.3.0" uvicorn anyio starlette --quiet 2>$null
-    }
+
+    # Write a constraints file that blocks pywin32 — we don't need it and its DLLs
+    # get locked on Windows causing WinError 5 on subsequent installs.
+    $constraintsFile = Join-Path $INSTALL_DIR "pip-constraints.txt"
+    "pywin32<0`npywin32-ctypes<0" | Set-Content $constraintsFile -Encoding UTF8
+
+    & $venvPy -m pip install "mcp>=1.3.0" uvicorn anyio starlette --quiet --constraint $constraintsFile 2>$null
 
     # Verify mcp is importable
     $step = "Verifying MCP import"
