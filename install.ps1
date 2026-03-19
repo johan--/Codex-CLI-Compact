@@ -112,22 +112,24 @@ try {
         # Step 2: If pywin32 is present in the venv, uninstall it now while the DLL is unlocked.
         # pywin32 got into venvs from a previous installer version; we don't need it.
         # If uninstall fails (still locked), fall through to venv recreation below.
+        # Step 2: Neutralise pywin32 if it was installed by a previous version.
+        # pywin32.pth is a plain text file — never locked, always deletable.
+        # Deleting it stops Python from trying to load pywin32_bootstrap on startup,
+        # which eliminates the stderr noise that crashes everything under EAP=Stop.
+        # We do NOT rely on `pip uninstall` — it returns exit 0 but leaves the .pth
+        # when the DLL is locked.
         $sitePkgs = Join-Path $venvDir "Lib\site-packages"
-        if (Test-Path (Join-Path $sitePkgs "pywin32.pth")) {
-            Write-Host "[install] Removing pywin32 (not needed, causes WinError 5 on reinstall)..."
-            # MUST use Invoke-Native here — Python's site module prints pywin32.pth errors to
-            # stderr when it starts, and $ErrorActionPreference="Stop" turns that into a
-            # terminating ErrorRecord before the uninstall even runs.
-            Invoke-Native { & $venvPython -m pip uninstall pywin32 pywin32-ctypes -y } | Out-Null
-            if ($LASTEXITCODE -ne 0) {
-                # Uninstall failed — DLL still locked. Force-recreate the venv.
-                Write-Host "[install] pywin32 uninstall failed (DLL locked). Recreating venv..."
-                if (Test-Path $venvDir) {
-                    $tombstone = "$venvDir._pywin32_$(Get-Date -Format 'yyyyMMddHHmmss')"
-                    try { Rename-Item $venvDir $tombstone -Force -ErrorAction Stop } catch {}
-                    try { Remove-Item $tombstone -Recurse -Force -ErrorAction SilentlyContinue } catch {}
-                }
+        $pywin32Pth = Join-Path $sitePkgs "pywin32.pth"
+        if (Test-Path $pywin32Pth) {
+            Write-Host "[install] Removing pywin32 (not needed, left by previous install)..."
+            try { Remove-Item $pywin32Pth -Force -ErrorAction SilentlyContinue } catch {}
+            # Also remove the pywin32_system32 DLL folder (best-effort; DLLs may be locked)
+            $pw32sys = Join-Path $sitePkgs "pywin32_system32"
+            if (Test-Path $pw32sys) {
+                try { Remove-Item $pw32sys -Recurse -Force -ErrorAction SilentlyContinue } catch {}
             }
+            # Run pip uninstall for a clean registry entry, but don't depend on its exit code
+            Invoke-Native { & $venvPython -m pip uninstall pywin32 pywin32-ctypes -y } | Out-Null
         }
 
         # Step 3: Probe the existing venv — reuse only if structurally complete and pip works.
@@ -435,14 +437,15 @@ try {
     $step = "Installing Python dependencies"
     Write-Host "[install] Installing Python dependencies..."
     $venvPy = "$INSTALL_DIR\venv\Scripts\python.exe"
-    & $venvPy -m pip install --upgrade pip --quiet
 
-    # Write a constraints file that blocks pywin32 — we don't need it and its DLLs
-    # get locked on Windows causing WinError 5 on subsequent installs.
+    # Write a constraints file that blocks pywin32 permanently.
     $constraintsFile = Join-Path $INSTALL_DIR "pip-constraints.txt"
     "pywin32<0`npywin32-ctypes<0" | Set-Content $constraintsFile -Encoding UTF8
 
-    & $venvPy -m pip install "mcp>=1.3.0" uvicorn anyio starlette --quiet --constraint $constraintsFile 2>$null
+    # Use Invoke-Native for ALL pip calls — Python prints pywin32.pth errors to stderr
+    # on startup even after we delete the .pth, and EAP=Stop turns that into a crash.
+    Invoke-Native { & $venvPy -m pip install --upgrade pip --quiet } | Out-Null
+    Invoke-Native { & $venvPy -m pip install "mcp>=1.3.0" uvicorn anyio starlette --quiet --constraint $constraintsFile } | Out-Null
 
     # Verify mcp is importable
     $step = "Verifying MCP import"
