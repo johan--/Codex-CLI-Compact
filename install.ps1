@@ -109,26 +109,27 @@ try {
             Start-Sleep -Milliseconds 500
         } catch {}
 
-        # Step 2: If pywin32 is present in the venv, uninstall it now while the DLL is unlocked.
-        # pywin32 got into venvs from a previous installer version; we don't need it.
-        # If uninstall fails (still locked), fall through to venv recreation below.
-        # Step 2: Neutralise pywin32 if it was installed by a previous version.
-        # pywin32.pth is a plain text file — never locked, always deletable.
-        # Deleting it stops Python from trying to load pywin32_bootstrap on startup,
-        # which eliminates the stderr noise that crashes everything under EAP=Stop.
-        # We do NOT rely on `pip uninstall` — it returns exit 0 but leaves the .pth
-        # when the DLL is locked.
+        # Step 2: Neutralise any orphaned pywin32 left by a previous installer version.
+        # pip uninstall exits 0 but leaves pywin32.pth behind when the DLL is locked.
+        # The leftover .pth makes every Python startup print a ModuleNotFoundError to
+        # stderr, which becomes a terminating exception under EAP=Stop.
+        # Fix: delete the .pth; if Windows ACLs block deletion, overwrite with empty
+        # content — write permission is granted even when delete isn't.
         $sitePkgs = Join-Path $venvDir "Lib\site-packages"
         $pywin32Pth = Join-Path $sitePkgs "pywin32.pth"
         if (Test-Path $pywin32Pth) {
-            Write-Host "[install] Removing pywin32 (not needed, left by previous install)..."
-            try { Remove-Item $pywin32Pth -Force -ErrorAction SilentlyContinue } catch {}
-            # Also remove the pywin32_system32 DLL folder (best-effort; DLLs may be locked)
+            Write-Host "[install] Neutralising orphaned pywin32 (left by previous install)..."
+            # 1. Try deletion first
+            try { Remove-Item $pywin32Pth -Force -ErrorAction Stop } catch {
+                # Deletion failed — overwrite with empty content so site.py ignores it
+                try { [System.IO.File]::WriteAllText($pywin32Pth, "") } catch {}
+            }
+            # 2. Best-effort cleanup of DLL folder (may be locked — non-fatal)
             $pw32sys = Join-Path $sitePkgs "pywin32_system32"
             if (Test-Path $pw32sys) {
                 try { Remove-Item $pw32sys -Recurse -Force -ErrorAction SilentlyContinue } catch {}
             }
-            # Run pip uninstall for a clean registry entry, but don't depend on its exit code
+            # 3. pip uninstall for registry cleanup — don't depend on exit code
             Invoke-Native { & $venvPython -m pip uninstall pywin32 pywin32-ctypes -y } | Out-Null
         }
 
