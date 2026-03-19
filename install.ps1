@@ -115,7 +115,10 @@ try {
         $sitePkgs = Join-Path $venvDir "Lib\site-packages"
         if (Test-Path (Join-Path $sitePkgs "pywin32.pth")) {
             Write-Host "[install] Removing pywin32 (not needed, causes WinError 5 on reinstall)..."
-            & $venvPython -m pip uninstall pywin32 pywin32-ctypes -y 2>$null
+            # MUST use Invoke-Native here — Python's site module prints pywin32.pth errors to
+            # stderr when it starts, and $ErrorActionPreference="Stop" turns that into a
+            # terminating ErrorRecord before the uninstall even runs.
+            Invoke-Native { & $venvPython -m pip uninstall pywin32 pywin32-ctypes -y } | Out-Null
             if ($LASTEXITCODE -ne 0) {
                 # Uninstall failed — DLL still locked. Force-recreate the venv.
                 Write-Host "[install] pywin32 uninstall failed (DLL locked). Recreating venv..."
