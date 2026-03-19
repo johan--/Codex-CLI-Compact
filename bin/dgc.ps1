@@ -511,6 +511,11 @@ try {
     Write-Host "[$Tool] Project : $resolvedProject"
     Write-Host "[$Tool] Data    : $DataDir"
     Write-Host ""
+    # Use Continue for all native-command calls (graph-builder, mcp-graph-server, claude)
+    # so that stderr output (tracebacks, npm notices) doesn't become a terminating error
+    # under the global $ErrorActionPreference = "Stop".
+    $prevEAPNative = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+
     Write-Host "[$Tool] Scanning project..."
     if ($grapeOk) {
         & (Join-Path $VenvBin "graph-builder.exe") --root $resolvedProject --out (Join-Path $DataDir "info_graph.json") 2> $scanErr
@@ -820,14 +825,10 @@ if ($transcript -and (Test-Path $transcript)) {
     Remove-Item Env:\PORT -ErrorAction SilentlyContinue
     $hasNativePref = Test-Path variable:PSNativeCommandUseErrorActionPreference
     if ($hasNativePref) { $prevNativePref = $PSNativeCommandUseErrorActionPreference; $global:PSNativeCommandUseErrorActionPreference = $false }
-    # Use Continue so npm stderr notices (e.g. "npm notice update available") don't become
-    # terminating errors under the global $ErrorActionPreference = "Stop".
-    $prevEAPClaude = $ErrorActionPreference; $ErrorActionPreference = "Continue"
     try {
         & claude
         $claudeExit = $LASTEXITCODE
     } finally {
-        $ErrorActionPreference = $prevEAPClaude
         Pop-Location
         if ($hasNativePref) { $global:PSNativeCommandUseErrorActionPreference = $prevNativePref }
     }
@@ -835,6 +836,9 @@ if ($transcript -and (Test-Path $transcript)) {
     if ($claudeExit -ne 0 -and $claudeExit -ne 130 -and $claudeExit -ne -1073741510) {
         Send-CliError "Running Claude" "Claude exited with code $claudeExit in dgc.ps1"
     }
+
+    # Restore strict error handling for cleanup
+    $ErrorActionPreference = $prevEAPNative
 
     Write-Host ""
     Write-Host "[$Tool] Cleaning up..."
