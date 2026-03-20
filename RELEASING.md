@@ -104,7 +104,32 @@ cd ~/Documents/Open\ source/scoop-dual-graph
 git push
 ```
 
-### 9. Publish to PyPI (if Core changed)
+### 9. Upload to Cloudflare R2 (if GitHub workflow is broken)
+
+Configure AWS CLI for R2 (one-time):
+
+```bash
+aws configure set aws_access_key_id <ACCESS_KEY_ID> --profile r2
+aws configure set aws_secret_access_key <SECRET_ACCESS_KEY> --profile r2
+aws configure set region auto --profile r2
+```
+
+Upload files:
+
+```bash
+cd ~/Documents/Open\ source/Claude-CLI-Compact-core
+ENDPOINT="https://<ACCOUNT_ID>.r2.cloudflarestorage.com"
+BUCKET="<bucket-name>"
+
+for f in mcp_graph_server.py graph_builder.py dual_graph_launch.sh dg.py; do
+  aws s3 cp $f s3://$BUCKET/$f --endpoint-url $ENDPOINT --profile r2
+done
+echo "3.8.89" | aws s3 cp - s3://$BUCKET/version.txt --endpoint-url $ENDPOINT --profile r2
+```
+
+R2 credentials are stored in `~/.aws/credentials` under the `r2` profile (never commit them).
+
+### 10. Publish to PyPI (if Core changed)
 
 If `pyproject.toml` or any Core source files changed:
 
