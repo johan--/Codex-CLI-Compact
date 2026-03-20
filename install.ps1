@@ -4,7 +4,7 @@ try {
     #   irm https://raw.githubusercontent.com/kunal12203/Codex-CLI-Compact/main/install.ps1 | iex
 
     $ErrorActionPreference = "Stop"
-    $LICENSE_SERVER = "https://dual-graph-license-production.up.railway.app"
+
     $R2          = "https://pub-18426978d5a14bf4a60ddedd7d5b6dab.r2.dev"
     $BASE_URL    = "https://raw.githubusercontent.com/kunal12203/Codex-CLI-Compact/main"
     $INSTALL_DIR = "$env:USERPROFILE\.dual-graph"
@@ -374,46 +374,27 @@ try {
     $step = "Initializing install directory"
     New-Item -ItemType Directory -Force -Path $INSTALL_DIR | Out-Null
 
-    # ── License check + install telemetry (same as install.sh flow) ───────────────
-    $step = "Checking license"
-    Write-Host "[install] Checking license..."
-    $licenseKey = "$env:DG_LICENSE_KEY"
-    $machineId = (Get-CimInstance -ClassName Win32_ComputerSystemProduct -ErrorAction SilentlyContinue).UUID
-    if ([string]::IsNullOrWhiteSpace($machineId)) { $machineId = "$env:COMPUTERNAME" }
-    $payload = @{
-        key        = $licenseKey
-        machine_id = $machineId
-        platform   = "windows"
-        tool       = "install-ps1"
-    }
-    $licenseOk = $false
+    # ── Identity setup ────────────────────────────────────────────────────────────
+    $step = "Writing identity"
+    $machineId = $null
     try {
-        $validateResp = Invoke-RestMethod `
-          -Uri "$LICENSE_SERVER/validate" `
-          -Method Post `
-          -ContentType "application/json" `
-          -Body ($payload | ConvertTo-Json -Compress) `
-          -TimeoutSec 10
-        if ($validateResp.ok) {
-            $licenseOk = $true
-            Write-Host "[install] License validated." -ForegroundColor Green
-        } else {
-            $err = "$($validateResp.error)"
-            if ([string]::IsNullOrWhiteSpace($err)) { $err = "unknown" }
-            Write-Host "[install] License check returned: $err" -ForegroundColor Yellow
-            Write-Host "[install] Continuing installation..." -ForegroundColor Yellow
+        $existingIdPath = Join-Path $env:USERPROFILE ".dual-graph\identity.json"
+        if (Test-Path $existingIdPath) {
+            $existingIdentity = Get-Content $existingIdPath -Raw | ConvertFrom-Json
+            if ($existingIdentity.machine_id -and $existingIdentity.installed_date) {
+                $machineId = "$($existingIdentity.machine_id)"
+            }
         }
-    } catch {
-        Write-Host "[install] License server unreachable — skipping check." -ForegroundColor Yellow
-        Write-Host "[install] Continuing installation..." -ForegroundColor Yellow
-    }
+    } catch {}
+    if (-not $machineId) { $machineId = [System.Guid]::NewGuid().ToString("N") }
 
     # Save identity so MCP server can ping on each startup (tracks real usage)
     try {
         $identity = @{
-            machine_id = $machineId
-            platform   = "windows"
-            tool       = "install-ps1"
+            machine_id     = $machineId
+            platform       = "windows"
+            installed_date = (Get-Date -Format "yyyy-MM-dd")
+            tool           = "install-ps1"
         }
         $identity | ConvertTo-Json -Compress | Set-Content -Path "$INSTALL_DIR\identity.json" -Encoding UTF8
     } catch { }  # never block install
@@ -510,8 +491,14 @@ try {
 
     # Try to send telemetry
     try {
-        $machineId = (Get-CimInstance -ClassName Win32_ComputerSystemProduct -ErrorAction SilentlyContinue).UUID
-        if ([string]::IsNullOrWhiteSpace($machineId)) { $machineId = "$env:COMPUTERNAME" }
+        $machineId = "unknown"
+        try {
+            $errIdPath = Join-Path $env:USERPROFILE ".dual-graph\identity.json"
+            if (Test-Path $errIdPath) {
+                $errIdentity = Get-Content $errIdPath -Raw | ConvertFrom-Json
+                if ($errIdentity.machine_id) { $machineId = "$($errIdentity.machine_id)" }
+            }
+        } catch {}
 
         $errorPayload = @{
             type          = "install_error"

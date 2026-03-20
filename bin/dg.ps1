@@ -19,14 +19,23 @@ function Get-MachineId {
     try {
         if (Test-Path $identityPath) {
             $identity = Get-Content $identityPath -Raw | ConvertFrom-Json
-            if ($identity.machine_id) { return "$($identity.machine_id)" }
+            if ($identity.machine_id -and $identity.installed_date) { return "$($identity.machine_id)" }
+            # Existing users: just stamp installed_date, keep their ID intact
+            if ($identity.machine_id) {
+                $identity | Add-Member -NotePropertyName installed_date -NotePropertyValue (Get-Date -Format "yyyy-MM-dd") -Force
+                $identity | ConvertTo-Json -Compress | Set-Content -Path $identityPath -Encoding UTF8
+                return "$($identity.machine_id)"
+            }
         }
     } catch {}
+    # No identity.json or no machine_id — generate a random one and save it
     try {
-        $uuid = (Get-CimInstance -ClassName Win32_ComputerSystemProduct -ErrorAction SilentlyContinue).UUID
-        if ($uuid) { return "$uuid" }
+        $mid = [System.Guid]::NewGuid().ToString("N")
+        $identity = @{ machine_id = $mid; platform = "windows"; installed_date = (Get-Date -Format "yyyy-MM-dd"); tool = "launcher-ps1" }
+        New-Item -ItemType Directory -Force -Path $DG | Out-Null
+        $identity | ConvertTo-Json -Compress | Set-Content -Path $identityPath -Encoding UTF8
+        return $mid
     } catch {}
-    if ($env:COMPUTERNAME) { return $env:COMPUTERNAME }
     return "unknown"
 }
 

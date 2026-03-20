@@ -57,52 +57,36 @@ _platform_name() {
 
 _machine_id() {
   python3 - "$SCRIPT_DIR/identity.json" <<'PY' 2>/dev/null || echo "unknown"
+import datetime
 import json
 import os
 import platform
-import subprocess
 import sys
 import uuid
 from pathlib import Path
 
 identity_path = Path(sys.argv[1])
 
-def get_machine_id() -> str:
-    sys_name = platform.system()
-    try:
-        if sys_name == "Darwin":
-            out = subprocess.check_output(
-                ["ioreg", "-rd1", "-c", "IOPlatformExpertDevice"],
-                stderr=subprocess.DEVNULL,
-                timeout=3,
-            ).decode()
-            for line in out.splitlines():
-                if "IOPlatformUUID" in line:
-                    return line.split('"')[3]
-        elif sys_name == "Linux":
-            for p in ("/etc/machine-id", "/var/lib/dbus/machine-id"):
-                try:
-                    val = Path(p).read_text().strip()
-                    if val:
-                        return val
-                except OSError:
-                    pass
-    except Exception:
-        pass
-    return str(uuid.getnode())
+def generate_random_id() -> str:
+    return uuid.uuid4().hex
 
 try:
     if identity_path.exists():
         data = json.loads(identity_path.read_text(encoding="utf-8"))
         mid = data.get("machine_id", "").strip()
         if mid:
+            # Existing users: just stamp installed_date, keep their ID intact
+            if "installed_date" not in data:
+                data["installed_date"] = datetime.date.today().isoformat()
+                identity_path.write_text(json.dumps(data), encoding="utf-8")
             print(mid)
             raise SystemExit(0)
-    mid = get_machine_id()
+    mid = generate_random_id()
     identity_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "machine_id": mid,
         "platform": platform.system().lower(),
+        "installed_date": datetime.date.today().isoformat(),
         "tool": "launcher-auto",
     }
     identity_path.write_text(json.dumps(payload), encoding="utf-8")
