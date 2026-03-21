@@ -30,6 +30,7 @@ license/
 # Secrets — never commit
 .env
 .env.*
+RELEASING.md
 
 # macOS
 .DS_Store
