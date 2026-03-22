@@ -1,3 +1,9 @@
+3.9.6
+- Fixed: dgc now appends policy to existing CLAUDE.md instead of overwriting it (macOS, Linux, Windows)
+
+3.9.5
+- Fixed: token counter dashboard always reclaims port 8899 (macOS, Linux, Windows)
+
 3.9.4
 - Added: Unreal Engine 5 support (UCLASS, USTRUCT, UFUNCTION, UENUM macros) in graph_builder
 - Fixed: dgc not found on macOS bash — install.sh now writes to ~/.bash_profile
