@@ -1312,16 +1312,18 @@ set -e
 # Show resume hint with actual session ID
 if [[ "$ASSISTANT" == "claude" ]]; then
   _LAST_SESSION="$(python3 - "$HOME/.claude/history.jsonl" "$PROJECT" <<'PY'
-import sys, json
+import sys, json, os
 from pathlib import Path
-history_file, project = Path(sys.argv[1]), sys.argv[2].rstrip("/")
+history_file = Path(sys.argv[1])
+project = os.path.realpath(sys.argv[2]).rstrip("/")
 if not history_file.exists():
     sys.exit(0)
 last_id = ""
 for line in history_file.read_text(encoding="utf-8").splitlines():
     try:
         d = json.loads(line)
-        if d.get("project", "").rstrip("/") == project and d.get("sessionId"):
+        entry = os.path.realpath(d.get("project", "")).rstrip("/")
+        if entry.lower() == project.lower() and d.get("sessionId"):
             last_id = d["sessionId"]
     except Exception:
         pass

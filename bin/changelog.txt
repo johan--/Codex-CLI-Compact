@@ -1,3 +1,8 @@
+3.9.3
+- Fixed: dgc no longer hangs on Cloudflare-blocked ISPs (Turkey etc) — CLAUDE.md uses hardcoded fallback
+- Added: C and C++ language support (.c .cpp .h .hpp) in graph_builder
+- Fixed: session resume hint now handles case-insensitive project paths (macOS)
+
 3.9.2
 - Fixed: dgc no longer hangs on VPN during self-update
 - Added: dgc --resume SESSION_ID to resume sessions with dual-graph active
