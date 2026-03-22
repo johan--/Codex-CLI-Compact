@@ -402,7 +402,17 @@ try {
     # ── Download core engine ──────────────────────────────────────────────────────
     $step = "Downloading core engine"
     Write-Host "[install] Downloading core engine..."
-    Invoke-WebRequestWithRetry -Uri "$R2/dual_graph_launch.sh" -OutFile "$INSTALL_DIR\dual_graph_launch.sh" -Label "Download dual_graph_launch.sh"
+    $launchDest = "$INSTALL_DIR\dual_graph_launch.sh"
+    if (Test-Path $launchDest) {
+        Write-Host "[install] Core engine already present, skipping download."
+    } else {
+        try {
+            Invoke-WebRequestWithRetry -Uri "$R2/dual_graph_launch.sh" -OutFile $launchDest -Label "Download dual_graph_launch.sh"
+        } catch {
+            Write-Host "[install] R2 unreachable, falling back to GitHub..."
+            Invoke-WebRequestWithRetry -Uri "$BASE_URL/bin/dual_graph_launch.sh" -OutFile $launchDest -Label "Download dual_graph_launch.sh (GitHub fallback)"
+        }
+    }
 
     $step = "Downloading CLI wrappers"
     Write-Host "[install] Downloading CLI wrappers..."
