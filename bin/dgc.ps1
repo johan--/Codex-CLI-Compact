@@ -1,11 +1,25 @@
 # dgc - Claude Code + dual-graph MCP launcher (PowerShell)
 param(
     [Parameter(Position = 0)]
-    [string]$ProjectPath = ".",
+    [string]$Arg0 = ".",
+    [Parameter(Position = 1)]
+    [string]$Arg1 = "",
+    [Parameter(Position = 2)]
+    [string]$Arg2 = "",
     [string]$Resume = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+# Resolve $ProjectPath and $Resume from positional args.
+# Supports both PowerShell convention (-Resume <id>) and Unix convention (--resume <id>).
+if ($Arg0 -eq "--resume") {
+    $ProjectPath = (Get-Location).Path
+    if (-not $Resume) { $Resume = $Arg1 }
+} else {
+    $ProjectPath = $Arg0
+    if ($Arg1 -eq "--resume" -and -not $Resume) { $Resume = $Arg2 }
+}
 
 $DG = Join-Path $env:USERPROFILE ".dual-graph"
 $Tool = "dgc"
