@@ -1195,7 +1195,7 @@ STOPEOF
   PRIME_CMD="$DATA_DIR/prime.sh"
   # Write JSON via Python to avoid quoting/escaping issues in paths with spaces.
   "$PYTHON" - "$PROJECT/.claude/settings.local.json" "$PRIME_CMD" "$DATA_DIR/stop.sh" <<'PY'
-import json, sys, platform
+import json, sys, platform, os
 settings_file = sys.argv[1]
 prime_cmd = sys.argv[2]
 stop_cmd = sys.argv[3]
@@ -1203,19 +1203,32 @@ stop_cmd = sys.argv[3]
 bash = "bash" if platform.system() == "Windows" else "/bin/bash"
 hook_cmd = f'{bash} "{prime_cmd}"'
 stop_hook_cmd = f'{bash} "{stop_cmd}"'
-payload = {
-    "hooks": {
-        "SessionStart": [
-            {"matcher": "", "hooks": [{"type": "command", "command": hook_cmd}]}
-        ],
-        "PreCompact": [
-            {"matcher": "", "hooks": [{"type": "command", "command": hook_cmd}]}
-        ],
-        "Stop": [
-            {"matcher": "", "hooks": [{"type": "command", "command": stop_hook_cmd}]}
-        ],
-    }
+dgc_hooks = {
+    "SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": hook_cmd}]}],
+    "PreCompact":   [{"matcher": "", "hooks": [{"type": "command", "command": hook_cmd}]}],
+    "Stop":         [{"matcher": "", "hooks": [{"type": "command", "command": stop_hook_cmd}]}],
 }
+# Read existing settings so we don't wipe user's permissions/other keys
+existing = {}
+if os.path.exists(settings_file):
+    try:
+        with open(settings_file, "r", encoding="utf-8") as f:
+            existing = json.load(f)
+    except Exception:
+        pass
+# Merge hooks: remove stale dgc entries, prepend fresh ones, keep user's other hooks
+existing_hooks = existing.get("hooks", {})
+merged_hooks = dict(existing_hooks)
+for hook_type, new_entries in dgc_hooks.items():
+    old = existing_hooks.get(hook_type, [])
+    # Strip out old dgc-managed entries (identified by prime/stop script paths)
+    kept = [e for e in old if not any(
+        "prime.sh" in h.get("command", "") or "stop.sh" in h.get("command", "") or
+        "prime.ps1" in h.get("command", "") or "stop_hook" in h.get("command", "")
+        for h in e.get("hooks", [])
+    )]
+    merged_hooks[hook_type] = new_entries + kept  # dgc hooks first for priority
+payload = {**existing, "hooks": merged_hooks}
 with open(settings_file, "w", encoding="utf-8") as f:
     json.dump(payload, f, indent=2)
     f.write("\n")
