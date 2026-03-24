@@ -1,3 +1,8 @@
+3.9.12
+- Added: graperoot command — launch Claude, Codex, Cursor, or Gemini with dual-graph context
+- Added: graperoot --help, auto-update for all tools, first-run command guide
+- Added: Cursor IDE support with MCP config auto-write and Gemini CLI auto-install
+
 3.9.11
 - Fixed: dgc --resume now works on Windows PowerShell (double-dash flag parsing)
 3.9.10

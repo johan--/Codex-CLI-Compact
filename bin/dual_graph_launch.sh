@@ -7,8 +7,8 @@
 set -Eeuo pipefail
 
 ASSISTANT="${1:-}"
-if [[ "$ASSISTANT" != "codex" && "$ASSISTANT" != "claude" ]]; then
-  echo "Usage: $0 <codex|claude> [project_path] [prompt]" >&2
+if [[ "$ASSISTANT" != "codex" && "$ASSISTANT" != "claude" && "$ASSISTANT" != "cursor" && "$ASSISTANT" != "gemini" ]]; then
+  echo "Usage: $0 <codex|claude|cursor|gemini> [project_path] [prompt]" >&2
   exit 2
 fi
 shift
@@ -44,21 +44,32 @@ PROJECT="$(cd "$PROJECT" && pwd)"
 DATA_DIR="$PROJECT/.dual-graph"
 CURRENT_STEP="Initializing launcher"
 
-if [[ "$ASSISTANT" == "codex" ]]; then
-  TOOL_LABEL="dg"
-else
-  TOOL_LABEL="dgc"
-fi
+case "$ASSISTANT" in
+  codex)  TOOL_LABEL="dg" ;;
+  claude) TOOL_LABEL="dgc" ;;
+  *)      TOOL_LABEL="graperoot" ;;
+esac
 
 echo ""
 echo "[$TOOL_LABEL] If you receive any errors:"
-if [[ "$ASSISTANT" == "codex" ]]; then
-  echo "[$TOOL_LABEL]   1. Wait 5 minutes and run dg again"
-  echo "[$TOOL_LABEL]   2. Update Codex: npm install -g @openai/codex"
-else
-  echo "[$TOOL_LABEL]   1. Wait 5 minutes and run dgc again"
-  echo "[$TOOL_LABEL]   2. Update Claude Code: npm install -g @anthropic-ai/claude-code"
-fi
+case "$ASSISTANT" in
+  codex)
+    echo "[$TOOL_LABEL]   1. Wait 5 minutes and run dg again"
+    echo "[$TOOL_LABEL]   2. Update Codex: npm install -g @openai/codex"
+    ;;
+  claude)
+    echo "[$TOOL_LABEL]   1. Wait 5 minutes and run dgc again"
+    echo "[$TOOL_LABEL]   2. Update Claude Code: npm install -g @anthropic-ai/claude-code"
+    ;;
+  cursor)
+    echo "[$TOOL_LABEL]   1. Wait 5 minutes and run graperoot again"
+    echo "[$TOOL_LABEL]   2. Reinstall Cursor: https://www.cursor.com"
+    ;;
+  gemini)
+    echo "[$TOOL_LABEL]   1. Wait 5 minutes and run graperoot again"
+    echo "[$TOOL_LABEL]   2. Update Gemini CLI: npm install -g @google/generative-ai"
+    ;;
+esac
 echo "[$TOOL_LABEL]   3. Join Discord for help: https://discord.gg/rxgVVgCh"
 echo ""
 
@@ -186,7 +197,7 @@ if [[ "$ASSISTANT" == "codex" ]]; then
   POLICY_MARKER="dg-policy-v5"
   CONTEXT_DIR="$PROJECT/.dual-graph-context"
 else
-  TOOL_LABEL="dgc"
+  # claude, cursor, gemini all share CLAUDE.md as their context policy file
   DOC_FILE="$PROJECT/CLAUDE.md"
   DOC_NAME="CLAUDE.md"
   POLICY_MARKER="dgc-policy-v10"
@@ -219,6 +230,11 @@ if [[ -n "$_REMOTE_VER" ]] && _version_gt "$_REMOTE_VER" "$_LOCAL_VER"; then
   curl -fsSL --max-time 30 "$_BASE_URL/bin/dual_graph_launch.sh" -o "$SCRIPT_DIR/dual_graph_launch.sh" \
     || curl -fsSL --max-time 30 "$_R2/dual_graph_launch.sh" -o "$SCRIPT_DIR/dual_graph_launch.sh"
   chmod +x "$SCRIPT_DIR/dual_graph_launch.sh"
+  # Also update graperoot (new unified launcher) + Windows files
+  curl -fsSL --max-time 15 "$_BASE_URL/bin/graperoot" -o "$SCRIPT_DIR/graperoot" 2>/dev/null \
+    && chmod +x "$SCRIPT_DIR/graperoot" || true
+  curl -fsSL --max-time 15 "$_BASE_URL/bin/graperoot.cmd" -o "$SCRIPT_DIR/graperoot.cmd" 2>/dev/null || true
+  curl -fsSL --max-time 15 "$_BASE_URL/bin/graperoot.ps1" -o "$SCRIPT_DIR/graperoot.ps1" 2>/dev/null || true
   echo "$_REMOTE_VER" > "$SCRIPT_DIR/version.txt"
   # Upgrade graperoot so venv gets latest mcp_graph_server + compiled modules
   if [[ -x "$VENV_BIN/pip" ]]; then
@@ -1268,7 +1284,7 @@ if [[ "$ASSISTANT" == "codex" ]]; then
     _send_cli_error "Registering MCP" "MCP registration failed after auto-fix (codex): $_CODEX_REG_ERR"
     exit 1
   fi
-else
+elif [[ "$ASSISTANT" == "claude" ]]; then
   CURRENT_STEP="Registering MCP"
 
   # Auto-install claude CLI if missing
@@ -1339,6 +1355,138 @@ else
   if [[ -f "$_TC_PORT_FILE" ]]; then _TC_PORT=$(cat "$_TC_PORT_FILE"); fi
   echo "[$TOOL_LABEL] Token counter -> http://localhost:$_TC_PORT (global)"
   # ───────────────────────────────────────────────────────────────────────────
+
+elif [[ "$ASSISTANT" == "cursor" ]]; then
+  CURRENT_STEP="Registering MCP (Cursor)"
+
+  # Locate cursor CLI — prefer PATH, fall back to known install locations per OS
+  CURSOR_BIN=""
+  if command -v cursor &>/dev/null; then
+    CURSOR_BIN="cursor"
+  else
+    for _candidate in \
+      "/Applications/Cursor.app/Contents/Resources/app/bin/cursor" \
+      "$HOME/Applications/Cursor.app/Contents/Resources/app/bin/cursor" \
+      "$HOME/.local/bin/cursor" \
+      "/usr/local/bin/cursor" \
+      "/usr/bin/cursor" \
+      "/opt/cursor/cursor" \
+      "/snap/bin/cursor"; do
+      if [[ -x "$_candidate" ]]; then
+        CURSOR_BIN="$_candidate"
+        echo "[$TOOL_LABEL] Found cursor at: $_candidate"
+        echo "[$TOOL_LABEL] Tip: add it to PATH permanently:"
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+          echo "[$TOOL_LABEL]   Open Cursor -> Cmd+Shift+P -> 'Install cursor command'"
+        else
+          echo "[$TOOL_LABEL]   Add $(dirname "$_candidate") to your PATH"
+        fi
+        break
+      fi
+    done
+  fi
+  if [[ -z "$CURSOR_BIN" ]]; then
+    echo "[$TOOL_LABEL] ERROR: Cursor not found."
+    echo "[$TOOL_LABEL]   Install from https://www.cursor.com"
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+      echo "[$TOOL_LABEL]   Then: Cmd+Shift+P -> 'Install cursor command'"
+    else
+      echo "[$TOOL_LABEL]   Then ensure 'cursor' is on your PATH"
+    fi
+    _send_cli_error "Registering MCP" "cursor CLI not found"
+    exit 1
+  fi
+
+  # Write MCP server entry into the project's .cursor/mcp.json
+  mkdir -p "$PROJECT/.cursor"
+  "$PYTHON" - "$PROJECT/.cursor/mcp.json" "$MCP_PORT" <<'PY'
+import json, sys, os
+config_file = sys.argv[1]
+port = sys.argv[2]
+existing = {}
+if os.path.exists(config_file):
+    try:
+        with open(config_file, "r", encoding="utf-8") as f:
+            existing = json.load(f)
+    except Exception:
+        pass
+servers = existing.get("mcpServers", {})
+servers["dual-graph"] = {"url": f"http://localhost:{port}/mcp"}
+existing["mcpServers"] = servers
+with open(config_file, "w", encoding="utf-8") as f:
+    json.dump(existing, f, indent=2)
+    f.write("\n")
+PY
+  echo "[$TOOL_LABEL] MCP config written -> $PROJECT/.cursor/mcp.json"
+  echo "[$TOOL_LABEL] MCP URL: http://localhost:$MCP_PORT/mcp"
+  echo "[$TOOL_LABEL]"
+  echo "[$TOOL_LABEL] NOTE: activate dual-graph in Cursor (one-time setup):"
+  echo "[$TOOL_LABEL]   Cursor Settings -> Tools & MCP -> enable 'dual-graph'"
+
+elif [[ "$ASSISTANT" == "gemini" ]]; then
+  CURRENT_STEP="Registering MCP (Gemini)"
+
+  # Auto-install gemini CLI if missing
+  if ! command -v gemini &>/dev/null; then
+    echo "[$TOOL_LABEL] gemini CLI not found — installing..."
+    if command -v npm &>/dev/null; then
+      npm install -g @google/gemini-cli >/dev/null 2>&1 || true
+    fi
+    export PATH="$PATH:$(npm config get prefix 2>/dev/null)/bin:$HOME/.npm-global/bin:$HOME/.local/bin"
+    if ! command -v gemini &>/dev/null; then
+      echo "[$TOOL_LABEL] ERROR: could not auto-install gemini CLI."
+      echo "[$TOOL_LABEL]   npm install -g @google/gemini-cli"
+      _send_cli_error "Registering MCP" "gemini CLI not found, auto-install failed"
+      exit 1
+    fi
+    echo "[$TOOL_LABEL] gemini CLI installed."
+  fi
+
+  # Write MCP server entry into ~/.gemini/settings.json
+  mkdir -p "$HOME/.gemini"
+  "$PYTHON" - "$HOME/.gemini/settings.json" "$MCP_PORT" <<'PY'
+import json, sys, os
+config_file = sys.argv[1]
+port = sys.argv[2]
+existing = {}
+if os.path.exists(config_file):
+    try:
+        with open(config_file, "r", encoding="utf-8") as f:
+            existing = json.load(f)
+    except Exception:
+        pass
+servers = existing.get("mcpServers", {})
+servers["dual-graph"] = {"httpUrl": f"http://localhost:{port}/mcp"}
+existing["mcpServers"] = servers
+with open(config_file, "w", encoding="utf-8") as f:
+    json.dump(existing, f, indent=2)
+    f.write("\n")
+PY
+  echo "[$TOOL_LABEL] MCP config written -> $HOME/.gemini/settings.json"
+  echo "[$TOOL_LABEL] MCP URL: http://localhost:$MCP_PORT/mcp"
+fi
+
+# ── First-run: show all available commands ────────────────────────────────────
+_INSTALL_DATE_FILE="$SCRIPT_DIR/install_date.txt"
+if [[ ! -f "$_INSTALL_DATE_FILE" ]]; then
+  date +%Y-%m-%d > "$_INSTALL_DATE_FILE" 2>/dev/null || true
+  echo ""
+  echo "======================================================"
+  echo "  Graperoot installed! Available commands:"
+  echo "======================================================"
+  echo ""
+  echo "  graperoot [path] --claude    Claude Code"
+  echo "  graperoot [path] --codex     OpenAI Codex"
+  echo "  graperoot [path] --cursor    Cursor IDE"
+  echo "  graperoot [path] --gemini    Google Gemini CLI"
+  echo ""
+  echo "  Shortcuts:"
+  echo "    dgc [path]   →  graperoot [path] --claude"
+  echo "    dg  [path]   →  graperoot [path] --codex"
+  echo ""
+  echo "  graperoot --help   show full usage"
+  echo "======================================================"
+  echo ""
 fi
 
 # ── One-time feedback form ─────────────────────────────────────────────────────
@@ -1386,16 +1534,17 @@ fi
 CURRENT_STEP="Pre-flight checks"
 
 # 1. Verify the CLI tool is installed and in PATH (should already be fixed at registration step, but double-check)
-if ! command -v "$ASSISTANT" &>/dev/null; then
+# For cursor, CURSOR_BIN was resolved at registration; skip the PATH check.
+if [[ "$ASSISTANT" != "cursor" ]] && ! command -v "$ASSISTANT" &>/dev/null; then
   # Refresh PATH one more time
   export PATH="$PATH:$(npm config get prefix 2>/dev/null)/bin:$HOME/.npm-global/bin:$HOME/.local/bin"
   if ! command -v "$ASSISTANT" &>/dev/null; then
     echo "[$TOOL_LABEL] ERROR: '$ASSISTANT' CLI not found in PATH."
-    if [[ "$ASSISTANT" == "claude" ]]; then
-      echo "[$TOOL_LABEL]   npm install -g @anthropic-ai/claude-code"
-    else
-      echo "[$TOOL_LABEL]   npm install -g @openai/codex"
-    fi
+    case "$ASSISTANT" in
+      claude) echo "[$TOOL_LABEL]   npm install -g @anthropic-ai/claude-code" ;;
+      codex)  echo "[$TOOL_LABEL]   npm install -g @openai/codex" ;;
+      gemini) echo "[$TOOL_LABEL]   npm install -g @google/gemini-cli" ;;
+    esac
     _send_cli_error "Pre-flight checks" "$ASSISTANT CLI not found after auto-install"
     exit 1
   fi
@@ -1415,17 +1564,23 @@ if command -v node &>/dev/null; then
 fi
 
 # 3. Quick smoke test — verify CLI responds (catches broken installs, missing deps)
-if ! "$ASSISTANT" --version &>/dev/null 2>&1; then
+# cursor is validated via CURSOR_BIN at registration time; skip --version check for it.
+_SMOKE_BIN="${CURSOR_BIN:-$ASSISTANT}"
+if [[ "$ASSISTANT" != "cursor" ]] && ! "$_SMOKE_BIN" --version &>/dev/null 2>&1; then
   echo "[$TOOL_LABEL] WARNING: '$ASSISTANT --version' failed. The CLI may not work correctly."
-  echo "[$TOOL_LABEL] Try reinstalling: npm install -g @anthropic-ai/claude-code"
+  case "$ASSISTANT" in
+    claude) echo "[$TOOL_LABEL] Try reinstalling: npm install -g @anthropic-ai/claude-code" ;;
+    codex)  echo "[$TOOL_LABEL] Try reinstalling: npm install -g @openai/codex" ;;
+    gemini) echo "[$TOOL_LABEL] Try reinstalling: npm install -g @google/gemini-cli" ;;
+  esac
 fi
 
 # 4. Verify MCP server is still alive (it may have crashed between startup and now)
 if ! kill -0 "$MCP_PID" 2>/dev/null; then
-  echo "[$TOOL_LABEL] ERROR: MCP server (PID $MCP_PID) died before Claude started."
+  echo "[$TOOL_LABEL] ERROR: MCP server (PID $MCP_PID) died before $ASSISTANT started."
   _MCP_LOG_TAIL="$(tail -n 20 "$DATA_DIR/mcp_server.log" 2>/dev/null | tr '\n' ' ' | cut -c1-500)"
   echo "[$TOOL_LABEL] Last log: $_MCP_LOG_TAIL"
-  echo "[$TOOL_LABEL] Try running dgc again. If it persists, join Discord: https://discord.gg/rxgVVgCh"
+  echo "[$TOOL_LABEL] Try running $TOOL_LABEL again. If it persists, join Discord: https://discord.gg/rxgVVgCh"
   _send_cli_error "Pre-flight checks" "MCP server died before Claude started: $_MCP_LOG_TAIL"
   exit 1
 fi
@@ -1440,12 +1595,28 @@ cd "$PROJECT" || {
   _send_cli_error "Changing to project directory" "Cannot cd to project: $PROJECT"
   exit 1
 }
-CURRENT_STEP="Running Claude"
+CURRENT_STEP="Running $ASSISTANT"
 # Disable ERR trap — some bash versions (esp. Linux) fire ERR despite set +e,
 # causing spurious "Unhandled launcher failure" telemetry.
 trap - ERR
 set +e
-if [[ -n "$RESUME_ID" ]]; then
+if [[ "$ASSISTANT" == "cursor" ]]; then
+  # Cursor is an IDE — open project and keep MCP server alive until Ctrl+C.
+  # cursor . may return immediately (Cursor already running), so we can't rely
+  # on its exit to gate MCP server lifetime. Instead we keep the server up and
+  # let the user Ctrl+C when done.
+  echo "[$TOOL_LABEL] MCP server running on port $MCP_PORT"
+  echo "[$TOOL_LABEL]"
+  echo "[$TOOL_LABEL] To activate dual-graph in Cursor (one-time setup):"
+  echo "[$TOOL_LABEL]   Cursor Settings -> Tools & MCP -> enable 'dual-graph'"
+  echo "[$TOOL_LABEL]   Then reload Cursor — dual-graph will connect automatically."
+  echo "[$TOOL_LABEL]"
+  echo "[$TOOL_LABEL] Opening project in Cursor..."
+  "$CURSOR_BIN" "$PROJECT" 2>"$DATA_DIR/assistant_stderr.log" &
+  echo "[$TOOL_LABEL] Press Ctrl+C to stop the MCP server when you are done."
+  # Wait forever — Ctrl+C (SIGINT) will kill us and the MCP server child.
+  while true; do sleep 30; done
+elif [[ -n "$RESUME_ID" ]]; then
   "$ASSISTANT" --resume "$RESUME_ID" 2>"$DATA_DIR/assistant_stderr.log"
 elif [[ -n "$PROMPT" ]]; then
   "$ASSISTANT" "$PROMPT" 2>"$DATA_DIR/assistant_stderr.log"
@@ -1492,13 +1663,14 @@ if [[ "$ASSISTANT_EXIT" -ne 0 && "$ASSISTANT_EXIT" -ne 130 && "$ASSISTANT_EXIT" 
     echo "[$TOOL_LABEL] Error output: $_STDERR_TAIL"
   fi
   echo "[$TOOL_LABEL] Troubleshooting:"
-  if [[ "$ASSISTANT" == "claude" ]]; then
-    echo "[$TOOL_LABEL]   1. Update Claude Code: npm install -g @anthropic-ai/claude-code"
-  else
-    echo "[$TOOL_LABEL]   1. Update Codex: npm install -g @openai/codex"
-  fi
+  case "$ASSISTANT" in
+    claude) echo "[$TOOL_LABEL]   1. Update Claude Code: npm install -g @anthropic-ai/claude-code" ;;
+    codex)  echo "[$TOOL_LABEL]   1. Update Codex: npm install -g @openai/codex" ;;
+    cursor) echo "[$TOOL_LABEL]   1. Reinstall Cursor from https://www.cursor.com" ;;
+    gemini) echo "[$TOOL_LABEL]   1. Update Gemini CLI: npm install -g @google/gemini-cli" ;;
+  esac
   echo "[$TOOL_LABEL]   2. Try running '$ASSISTANT' directly to see if it works"
-  echo "[$TOOL_LABEL]   3. Run dgc again — it may be a transient issue"
+  echo "[$TOOL_LABEL]   3. Run $TOOL_LABEL again — it may be a transient issue"
   echo "[$TOOL_LABEL]   4. Join Discord for help: https://discord.gg/rxgVVgCh"
   _send_cli_error "Running $ASSISTANT" "$ASSISTANT exited=$ASSISTANT_EXIT stderr=$_STDERR_TAIL"
 fi

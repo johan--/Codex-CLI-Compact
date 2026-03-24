@@ -351,7 +351,9 @@ try {
                     @{ Primary = "$BaseUrl/bin/dgc.ps1";             Fallback = "$R2/dgc.ps1";            Out = (Join-Path $DG "dgc.ps1") },
                     @{ Primary = "$BaseUrl/bin/dg.ps1";              Fallback = "$R2/dg.ps1";             Out = (Join-Path $DG "dg.ps1") },
                     @{ Primary = "$BaseUrl/bin/dgc.cmd";             Fallback = "$R2/dgc.cmd";            Out = (Join-Path $DG "dgc.cmd") },
-                    @{ Primary = "$BaseUrl/bin/dg.cmd";              Fallback = "$R2/dg.cmd";             Out = (Join-Path $DG "dg.cmd") }
+                    @{ Primary = "$BaseUrl/bin/dg.cmd";              Fallback = "$R2/dg.cmd";             Out = (Join-Path $DG "dg.cmd") },
+                    @{ Primary = "$BaseUrl/bin/graperoot.ps1";       Fallback = "$R2/graperoot.ps1";      Out = (Join-Path $DG "graperoot.ps1") },
+                    @{ Primary = "$BaseUrl/bin/graperoot.cmd";       Fallback = "$R2/graperoot.cmd";      Out = (Join-Path $DG "graperoot.cmd") }
                 )
                 foreach ($item in $downloads) { [void](Download-File $item.Primary $item.Fallback $item.Out) }
                 $dgcPs1 = Join-Path $DG "dgc.ps1"
