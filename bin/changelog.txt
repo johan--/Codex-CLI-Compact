@@ -1,3 +1,7 @@
+3.9.18
+- Fixed: graperoot --cursor/--gemini crash on Windows (Start-Process same stdout/stderr file)
+- Fixed: graperoot unknown flag (e.g. --code) no longer treated as project path
+
 3.9.17
 - Fixed: graperoot command not found on Mac/Linux after upgrading from pre-3.9.13 install
 - Fixed: context-store.json bloat — new graph_add_memory MCP tool with auto-prune; in-memory cache

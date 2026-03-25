@@ -62,7 +62,8 @@ foreach ($arg in @($Arg0, $Arg1, $Arg2)) {
     if ($arg -in @("--cursor","cursor"))   { $Assistant = "cursor";  continue }
     if ($arg -in @("--gemini","gemini"))   { $Assistant = "gemini";  continue }
     if ($arg -and $arg -ne ".") {
-        if (-not $ProjectPath) { $ProjectPath = $arg }
+        if ($arg.StartsWith("--")) { $Passthrough += $arg }
+        elseif (-not $ProjectPath) { $ProjectPath = $arg }
         else { $Passthrough += $arg }
     }
 }
@@ -215,7 +216,7 @@ Write-Host "[$Tool] Waiting for MCP server..."
 
 $mcpProc = Start-Process -FilePath $Python `
     -ArgumentList @($McpServer, "--port", $McpPort, "--data-dir", $DataDir) `
-    -RedirectStandardOutput $McpLog -RedirectStandardError $McpLog `
+    -RedirectStandardOutput $McpLog -RedirectStandardError "$McpLog.err" `
     -PassThru -WindowStyle Hidden
 
 Set-Content -Path $McpPidFile -Value $mcpProc.Id
