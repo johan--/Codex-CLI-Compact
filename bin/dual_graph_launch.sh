@@ -274,6 +274,12 @@ for n in notes: print(n)
 elif [[ -n "$_REMOTE_VER" && "$_REMOTE_VER" != "$_LOCAL_VER" ]]; then
   echo "[$TOOL_LABEL] Local version ($_LOCAL_VER) is newer than remote ($_REMOTE_VER); skipping downgrade."
 fi
+# ── Bootstrap graperoot if missing (users who installed before 3.9.13) ───────
+if [[ ! -x "$SCRIPT_DIR/graperoot" ]]; then
+  curl -fsSL --max-time 15 "$_BASE_URL/bin/graperoot" -o "$SCRIPT_DIR/graperoot" 2>/dev/null \
+    || curl -fsSL --max-time 15 "$_R2/graperoot" -o "$SCRIPT_DIR/graperoot" 2>/dev/null || true
+  [[ -f "$SCRIPT_DIR/graperoot" ]] && chmod +x "$SCRIPT_DIR/graperoot"
+fi
 # ──────────────────────────────────────────────────────────────────────────────
 
 # ── Linux dependency checks ──────────────────────────────────────────────────

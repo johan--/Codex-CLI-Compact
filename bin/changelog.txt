@@ -1,3 +1,6 @@
+3.9.17
+- Fixed: graperoot command not found on Mac/Linux after upgrading from pre-3.9.13 install
+
 3.9.16
 - Fixed: graperoot.ps1 double-BOM causing "assignment expression not valid" on Windows
 
