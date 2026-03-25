@@ -1,4 +1,4 @@
-﻿﻿# graperoot.ps1 - Windows launcher for Dual-Graph with AI tool selection
+﻿# graperoot.ps1 - Windows launcher for Dual-Graph with AI tool selection
 # Handles --cursor and --gemini directly.
 # For --claude and --codex, delegates to dgc.ps1 / dg.ps1.
 #
