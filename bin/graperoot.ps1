@@ -119,7 +119,12 @@ if ($_RemoteVer -and ($_LocalVer -eq "0" -or ([version]$_RemoteVer -gt [version]
     try { $_RemoteVer | Set-Content -Path $_VerFile -Encoding UTF8 } catch {}
     Write-Host "[$Tool] Updated to $_RemoteVer. Restarting..."
     $_newScript = Join-Path $DG "graperoot.ps1"
-    if (Test-Path $_newScript) { & $_newScript @($Arg0, $Arg1, $Arg2); exit $LASTEXITCODE }
+    if (Test-Path $_newScript) {
+        # Filter empty strings — splatting "" to a typed [string] param causes coercion errors
+        $_restartArgs = @($Arg0, $Arg1, $Arg2) | Where-Object { $_ }
+        if ($Resume) { $_restartArgs += "--resume"; $_restartArgs += $Resume }
+        & $_newScript @_restartArgs; exit $LASTEXITCODE
+    }
 }
 
 # -- cursor / gemini: need the full pipeline - load shared helpers from dgc.ps1 -
