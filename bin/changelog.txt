@@ -1,3 +1,6 @@
+3.9.24
+- Fixed: PyPI wheel was Python 3.14-only (Cython in build-deps); now universal py3-none-any wheel
+
 3.9.23
 - Fixed: mcp_graph_server.py never updated on auto-update (missing from update list)
 
