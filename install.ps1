@@ -490,8 +490,10 @@ try {
     Write-Host "========================================" -ForegroundColor Green
     Write-Host ""
     Write-Host "  Run now in this terminal:" -ForegroundColor White
-    Write-Host "    dgc `"C:\path\to\your\project`"   # Claude Code" -ForegroundColor White
-    Write-Host "    dg  `"C:\path\to\your\project`"   # Codex CLI" -ForegroundColor White
+    Write-Host "    dgc `"C:\path\to\your\project`"              # Claude Code" -ForegroundColor White
+    Write-Host "    dg  `"C:\path\to\your\project`"              # Codex CLI" -ForegroundColor White
+    Write-Host "    graperoot `"C:\path\to\your\project`" --cursor   # Cursor IDE" -ForegroundColor White
+    Write-Host "    graperoot `"C:\path\to\your\project`" --gemini   # Gemini CLI" -ForegroundColor White
     Write-Host ""
 
 } catch {
