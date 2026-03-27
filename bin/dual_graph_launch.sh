@@ -7,7 +7,9 @@
 set -Eeuo pipefail
 
 ASSISTANT="${1:-}"
-if [[ "$ASSISTANT" != "codex" && "$ASSISTANT" != "claude" && "$ASSISTANT" != "cursor" && "$ASSISTANT" != "gemini" && "$ASSISTANT" != "opencode" && "$ASSISTANT" != "copilot" ]]; then
+ASSISTANT="${ASSISTANT#--}"   # strip leading -- so --claude == claude
+if [[ "$ASSISTANT" != "codex" && "$ASSISTANT" != "claude" && "$ASSISTANT" != "cursor" \
+   && "$ASSISTANT" != "gemini" && "$ASSISTANT" != "opencode" && "$ASSISTANT" != "copilot" ]]; then
   echo "Usage: $0 <codex|claude|cursor|gemini|opencode|copilot> [project_path] [prompt]" >&2
   exit 2
 fi

@@ -7,6 +7,8 @@
 #   graperoot [path] --codex     OpenAI Codex
 #   graperoot [path] --cursor    Cursor IDE
 #   graperoot [path] --gemini    Google Gemini CLI
+#   graperoot [path] --opencode  OpenCode
+#   graperoot [path] --copilot   GitHub Copilot (VS Code)
 
 param(
     [Parameter(Position = 0)] [string]$Arg0 = ".",
@@ -31,6 +33,7 @@ if ($Arg0 -in @("--help","-h","?","/?")) {
     Write-Host "    --cursor    Cursor IDE"
     Write-Host "    --gemini    Google Gemini CLI"
     Write-Host "    --opencode  OpenCode"
+    Write-Host "    --copilot   GitHub Copilot (VS Code)"
     Write-Host ""
     Write-Host "  Options:"
     Write-Host "    --resume <id>    Resume a previous claude / codex session"
@@ -39,8 +42,9 @@ if ($Arg0 -in @("--help","-h","?","/?")) {
     Write-Host "  Examples:"
     Write-Host "    graperoot . --claude"
     Write-Host "    graperoot C:\my\project --cursor"
-    Write-Host "    graperoot C:\my\project --gemini
-    graperoot C:\my\project --opencode"
+    Write-Host "    graperoot C:\my\project --gemini"
+    Write-Host "    graperoot C:\my\project --opencode"
+    Write-Host "    graperoot C:\my\project --copilot"
     Write-Host "    graperoot C:\my\project --claude --resume <session-id>"
     Write-Host "    dgc .                        # same as graperoot . --claude"
     Write-Host "    dg  .                        # same as graperoot . --codex"
@@ -59,11 +63,12 @@ $ProjectPath = ""
 $Passthrough = @()
 
 foreach ($arg in @($Arg0, $Arg1, $Arg2)) {
-    if ($arg -in @("--claude","claude"))   { $Assistant = "claude";  continue }
-    if ($arg -in @("--codex","codex"))     { $Assistant = "codex";   continue }
-    if ($arg -in @("--cursor","cursor"))   { $Assistant = "cursor";  continue }
-    if ($arg -in @("--gemini","gemini"))   { $Assistant = "gemini";  continue }
+    if ($arg -in @("--claude","claude"))     { $Assistant = "claude";   continue }
+    if ($arg -in @("--codex","codex"))       { $Assistant = "codex";    continue }
+    if ($arg -in @("--cursor","cursor"))     { $Assistant = "cursor";   continue }
+    if ($arg -in @("--gemini","gemini"))     { $Assistant = "gemini";   continue }
     if ($arg -in @("--opencode","opencode")) { $Assistant = "opencode"; continue }
+    if ($arg -in @("--copilot","copilot"))   { $Assistant = "copilot";  continue }
     if ($arg -and $arg -ne ".") {
         if ($arg.StartsWith("--")) { $Passthrough += $arg }
         elseif (-not $ProjectPath) { $ProjectPath = $arg }
@@ -379,10 +384,7 @@ if ($Assistant -eq "opencode") {
         Write-Host "[$Tool] opencode installed."
     }
 
-    # Write MCP entry into project-level opencode.json.
-    # Use Python (json.dump indent=2) instead of ConvertTo-Json because
-    # PowerShell's ConvertTo-Json adds extra alignment spaces that opencode's
-    # strict JSON parser rejects.
+    # Write MCP entry into project-level opencode.json
     $OpenCodeConf = Join-Path $ProjectPath "opencode.json"
     $ocMcp    = [PSCustomObject]@{}
     $ocSchema = "https://opencode.ai/config.json"
@@ -398,15 +400,17 @@ if ($Assistant -eq "opencode") {
     $ocOut = [PSCustomObject]@{}
     $ocOut | Add-Member -NotePropertyName '$schema' -NotePropertyValue $ocSchema
     $ocOut | Add-Member -NotePropertyName 'mcp'     -NotePropertyValue $ocMcp
+    # Use Python to write JSON so the output is standard indent=2 (ConvertTo-Json adds
+    # extra alignment spaces that opencode's strict JSON parser rejects).
     $ocJsonCompact = $ocOut | ConvertTo-Json -Depth 5 -Compress
-    $pyScript = @"
+    $pyScript = @'
 import json, sys
-data = json.loads(sys.argv[1])
-with open(sys.argv[2], 'w', encoding='utf-8') as f:
+data = json.load(sys.stdin)
+with open(sys.argv[1], 'w', encoding='utf-8') as f:
     json.dump(data, f, indent=2)
     f.write('\n')
-"@
-    & $Python -c $pyScript $ocJsonCompact $OpenCodeConf
+'@
+    $ocJsonCompact | & $Python -c $pyScript $OpenCodeConf
 
     Write-Host "[$Tool] MCP config written -> $OpenCodeConf"
     Write-Host "[$Tool] MCP URL: http://localhost:$McpPort/mcp"
@@ -416,6 +420,70 @@ with open(sys.argv[2], 'w', encoding='utf-8') as f:
     Write-Host "[$Tool] Starting opencode..."
     Write-Host ""
     opencode
+}
+
+# -- Copilot: write .vscode/mcp.json and open VS Code -------------------------
+if ($Assistant -eq "copilot") {
+    # Find VS Code CLI
+    $CodeBin = $null
+    $candidates = @(
+        (Join-Path $env:LOCALAPPDATA "Programs\Microsoft VS Code\bin\code.cmd"),
+        (Join-Path $env:LOCALAPPDATA "Programs\Microsoft VS Code\Code.exe"),
+        "code"
+    )
+    foreach ($c in $candidates) {
+        if ($c -eq "code") {
+            if (Get-Command code -ErrorAction SilentlyContinue) { $CodeBin = "code"; break }
+        } elseif (Test-Path $c) {
+            $CodeBin = $c; break
+        }
+    }
+    if (-not $CodeBin) {
+        Write-Host "[$Tool] ERROR: VS Code CLI ('code') not found."
+        Write-Host "[$Tool]   Install from https://code.visualstudio.com"
+        Write-Host "[$Tool]   Then: Ctrl+Shift+P -> 'Shell Command: Install code command'"
+        Stop-Process -Id $mcpProc.Id -Force -ErrorAction SilentlyContinue
+        exit 1
+    }
+
+    # Write .vscode/mcp.json
+    $VsCodeDir = Join-Path $ProjectPath ".vscode"
+    New-Item -ItemType Directory -Force -Path $VsCodeDir | Out-Null
+    $McpJson = Join-Path $VsCodeDir "mcp.json"
+    $vsConf = [PSCustomObject]@{ servers = [PSCustomObject]@{} }
+    if (Test-Path $McpJson) {
+        try { $vsConf = Get-Content $McpJson -Raw | ConvertFrom-Json } catch {}
+    }
+    if (-not $vsConf.servers) { $vsConf | Add-Member -NotePropertyName "servers" -NotePropertyValue ([PSCustomObject]@{}) -Force }
+    $vsConf.servers | Add-Member -NotePropertyName "dual-graph" `
+        -NotePropertyValue ([PSCustomObject]@{ type = "http"; url = "http://localhost:$McpPort/mcp" }) -Force
+    $vsJsonCompact = $vsConf | ConvertTo-Json -Depth 5 -Compress
+    $vsPyScript = @'
+import json, sys
+data = json.load(sys.stdin)
+with open(sys.argv[1], 'w', encoding='utf-8') as f:
+    json.dump(data, f, indent=2)
+    f.write('\n')
+'@
+    $vsJsonCompact | & $Python -c $vsPyScript $McpJson
+
+    Write-Host "[$Tool] MCP config written -> $McpJson"
+    Write-Host "[$Tool] MCP URL: http://localhost:$McpPort/mcp"
+    Write-Host ""
+    Write-Host "[$Tool] NOTE: enable dual-graph in VS Code (one-time setup):"
+    Write-Host "[$Tool]   Copilot Chat panel -> Agent mode -> enable 'dual-graph'"
+    Write-Host ""
+    Write-Host "[$Tool] Opening project in VS Code..."
+
+    if ($CodeBin -eq "code") {
+        Start-Process "code" -ArgumentList $ProjectPath
+    } else {
+        Start-Process $CodeBin -ArgumentList $ProjectPath
+    }
+
+    Write-Host "[$Tool] MCP server running on port $McpPort"
+    Write-Host "[$Tool] Press Ctrl+C to stop the MCP server when you are done."
+    try { $mcpProc.WaitForExit() } catch { Start-Sleep -Seconds 86400 }
 }
 
 # Cleanup
