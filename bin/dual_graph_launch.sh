@@ -7,8 +7,8 @@
 set -Eeuo pipefail
 
 ASSISTANT="${1:-}"
-if [[ "$ASSISTANT" != "codex" && "$ASSISTANT" != "claude" && "$ASSISTANT" != "cursor" && "$ASSISTANT" != "gemini" ]]; then
-  echo "Usage: $0 <codex|claude|cursor|gemini> [project_path] [prompt]" >&2
+if [[ "$ASSISTANT" != "codex" && "$ASSISTANT" != "claude" && "$ASSISTANT" != "cursor" && "$ASSISTANT" != "gemini" && "$ASSISTANT" != "opencode" && "$ASSISTANT" != "copilot" ]]; then
+  echo "Usage: $0 <codex|claude|cursor|gemini|opencode|copilot> [project_path] [prompt]" >&2
   exit 2
 fi
 shift
@@ -68,6 +68,14 @@ case "$ASSISTANT" in
   gemini)
     echo "[$TOOL_LABEL]   1. Wait 5 minutes and run graperoot again"
     echo "[$TOOL_LABEL]   2. Update Gemini CLI: npm install -g @google/generative-ai"
+    ;;
+  opencode)
+    echo "[$TOOL_LABEL]   1. Wait 5 minutes and run graperoot again"
+    echo "[$TOOL_LABEL]   2. Update OpenCode: npm install -g opencode"
+    ;;
+  copilot)
+    echo "[$TOOL_LABEL]   1. Wait 5 minutes and run graperoot again"
+    echo "[$TOOL_LABEL]   2. Ensure VS Code is installed: https://code.visualstudio.com"
     ;;
 esac
 echo "[$TOOL_LABEL]   3. Join Discord for help: https://discord.gg/rxgVVgCh"
@@ -1503,6 +1511,109 @@ with open(config_file, "w", encoding="utf-8") as f:
 PY
   echo "[$TOOL_LABEL] MCP config written -> $HOME/.gemini/settings.json"
   echo "[$TOOL_LABEL] MCP URL: http://localhost:$MCP_PORT/mcp"
+
+elif [[ "$ASSISTANT" == "opencode" ]]; then
+  CURRENT_STEP="Registering MCP (OpenCode)"
+
+  # Auto-install opencode CLI if missing
+  if ! command -v opencode &>/dev/null; then
+    echo "[$TOOL_LABEL] opencode CLI not found — installing..."
+    if command -v npm &>/dev/null; then
+      npm install -g opencode >/dev/null 2>&1 || true
+    fi
+    export PATH="$PATH:$(npm config get prefix 2>/dev/null)/bin:$HOME/.npm-global/bin:$HOME/.local/bin"
+    if ! command -v opencode &>/dev/null; then
+      echo "[$TOOL_LABEL] ERROR: could not auto-install opencode."
+      echo "[$TOOL_LABEL]   npm install -g opencode"
+      _send_cli_error "Registering MCP" "opencode CLI not found, auto-install failed"
+      exit 1
+    fi
+    echo "[$TOOL_LABEL] opencode installed."
+  fi
+
+  # Write MCP server entry into project-level opencode.json
+  "$PYTHON" - "$PROJECT/opencode.json" "$MCP_PORT" <<'PY'
+import json, sys, os
+config_file = sys.argv[1]
+port = sys.argv[2]
+existing = {}
+if os.path.exists(config_file):
+    try:
+        with open(config_file, "r", encoding="utf-8") as f:
+            existing = json.load(f)
+    except Exception:
+        pass
+if "$schema" not in existing:
+    existing["$schema"] = "https://opencode.ai/config.json"
+mcp = existing.get("mcp", {})
+mcp["dual-graph"] = {"type": "remote", "url": f"http://localhost:{port}/mcp", "enabled": True}
+existing["mcp"] = mcp
+with open(config_file, "w", encoding="utf-8") as f:
+    json.dump(existing, f, indent=2)
+    f.write("\n")
+PY
+  echo "[$TOOL_LABEL] MCP config written -> $PROJECT/opencode.json"
+  echo "[$TOOL_LABEL] MCP URL: http://localhost:$MCP_PORT/mcp"
+
+elif [[ "$ASSISTANT" == "copilot" ]]; then
+  CURRENT_STEP="Registering MCP (Copilot / VS Code)"
+
+  # Locate VS Code CLI
+  CODE_BIN=""
+  if command -v code &>/dev/null; then
+    CODE_BIN="code"
+  else
+    for _candidate in \
+      "/usr/local/bin/code" \
+      "/usr/bin/code" \
+      "$HOME/.local/bin/code" \
+      "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" \
+      "$HOME/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" \
+      "/snap/bin/code"; do
+      if [[ -x "$_candidate" ]]; then
+        CODE_BIN="$_candidate"
+        echo "[$TOOL_LABEL] Found VS Code at: $_candidate"
+        break
+      fi
+    done
+  fi
+  if [[ -z "$CODE_BIN" ]]; then
+    echo "[$TOOL_LABEL] ERROR: VS Code CLI ('code') not found."
+    echo "[$TOOL_LABEL]   Install from https://code.visualstudio.com"
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+      echo "[$TOOL_LABEL]   Then: Cmd+Shift+P -> 'Shell Command: Install code command'"
+    else
+      echo "[$TOOL_LABEL]   Then ensure 'code' is on your PATH"
+    fi
+    _send_cli_error "Registering MCP" "VS Code CLI not found"
+    exit 1
+  fi
+
+  # Write MCP server entry into .vscode/mcp.json
+  mkdir -p "$PROJECT/.vscode"
+  "$PYTHON" - "$PROJECT/.vscode/mcp.json" "$MCP_PORT" <<'PY'
+import json, sys, os
+config_file = sys.argv[1]
+port = sys.argv[2]
+existing = {}
+if os.path.exists(config_file):
+    try:
+        with open(config_file, "r", encoding="utf-8") as f:
+            existing = json.load(f)
+    except Exception:
+        pass
+servers = existing.get("servers", {})
+servers["dual-graph"] = {"type": "http", "url": f"http://localhost:{port}/mcp"}
+existing["servers"] = servers
+with open(config_file, "w", encoding="utf-8") as f:
+    json.dump(existing, f, indent=2)
+    f.write("\n")
+PY
+  echo "[$TOOL_LABEL] MCP config written -> $PROJECT/.vscode/mcp.json"
+  echo "[$TOOL_LABEL] MCP URL: http://localhost:$MCP_PORT/mcp"
+  echo "[$TOOL_LABEL]"
+  echo "[$TOOL_LABEL] NOTE: enable dual-graph in VS Code (one-time setup):"
+  echo "[$TOOL_LABEL]   Copilot Chat panel -> Agent mode -> enable 'dual-graph'"
 fi
 
 # ── First-run: show all available commands ────────────────────────────────────
@@ -1518,6 +1629,8 @@ if [[ ! -f "$_INSTALL_DATE_FILE" ]]; then
   echo "  graperoot [path] --codex     OpenAI Codex"
   echo "  graperoot [path] --cursor    Cursor IDE"
   echo "  graperoot [path] --gemini    Google Gemini CLI"
+  echo "  graperoot [path] --opencode  OpenCode"
+  echo "  graperoot [path] --copilot   GitHub Copilot (VS Code)"
   echo ""
   echo "  Shortcuts:"
   echo "    dgc [path]   →  graperoot [path] --claude"
@@ -1573,8 +1686,8 @@ fi
 CURRENT_STEP="Pre-flight checks"
 
 # 1. Verify the CLI tool is installed and in PATH (should already be fixed at registration step, but double-check)
-# For cursor, CURSOR_BIN was resolved at registration; skip the PATH check.
-if [[ "$ASSISTANT" != "cursor" ]] && ! command -v "$ASSISTANT" &>/dev/null; then
+# For cursor/copilot, bin was resolved at registration; skip the PATH check.
+if [[ "$ASSISTANT" != "cursor" && "$ASSISTANT" != "copilot" ]] && ! command -v "$ASSISTANT" &>/dev/null; then
   # Refresh PATH one more time
   export PATH="$PATH:$(npm config get prefix 2>/dev/null)/bin:$HOME/.npm-global/bin:$HOME/.local/bin"
   if ! command -v "$ASSISTANT" &>/dev/null; then
@@ -1582,7 +1695,8 @@ if [[ "$ASSISTANT" != "cursor" ]] && ! command -v "$ASSISTANT" &>/dev/null; then
     case "$ASSISTANT" in
       claude) echo "[$TOOL_LABEL]   npm install -g @anthropic-ai/claude-code" ;;
       codex)  echo "[$TOOL_LABEL]   npm install -g @openai/codex" ;;
-      gemini) echo "[$TOOL_LABEL]   npm install -g @google/gemini-cli" ;;
+      gemini)   echo "[$TOOL_LABEL]   npm install -g @google/gemini-cli" ;;
+      opencode) echo "[$TOOL_LABEL]   npm install -g opencode" ;;
     esac
     _send_cli_error "Pre-flight checks" "$ASSISTANT CLI not found after auto-install"
     exit 1
@@ -1604,13 +1718,14 @@ fi
 
 # 3. Quick smoke test — verify CLI responds (catches broken installs, missing deps)
 # cursor is validated via CURSOR_BIN at registration time; skip --version check for it.
-_SMOKE_BIN="${CURSOR_BIN:-$ASSISTANT}"
-if [[ "$ASSISTANT" != "cursor" ]] && ! "$_SMOKE_BIN" --version &>/dev/null 2>&1; then
+_SMOKE_BIN="${CURSOR_BIN:-${CODE_BIN:-$ASSISTANT}}"
+if [[ "$ASSISTANT" != "cursor" && "$ASSISTANT" != "copilot" ]] && ! "$_SMOKE_BIN" --version &>/dev/null 2>&1; then
   echo "[$TOOL_LABEL] WARNING: '$ASSISTANT --version' failed. The CLI may not work correctly."
   case "$ASSISTANT" in
-    claude) echo "[$TOOL_LABEL] Try reinstalling: npm install -g @anthropic-ai/claude-code" ;;
-    codex)  echo "[$TOOL_LABEL] Try reinstalling: npm install -g @openai/codex" ;;
-    gemini) echo "[$TOOL_LABEL] Try reinstalling: npm install -g @google/gemini-cli" ;;
+    claude)   echo "[$TOOL_LABEL] Try reinstalling: npm install -g @anthropic-ai/claude-code" ;;
+    codex)    echo "[$TOOL_LABEL] Try reinstalling: npm install -g @openai/codex" ;;
+    gemini)   echo "[$TOOL_LABEL] Try reinstalling: npm install -g @google/gemini-cli" ;;
+    opencode) echo "[$TOOL_LABEL] Try reinstalling: npm install -g opencode" ;;
   esac
 fi
 
@@ -1641,9 +1756,6 @@ trap - ERR
 set +e
 if [[ "$ASSISTANT" == "cursor" ]]; then
   # Cursor is an IDE — open project and keep MCP server alive until Ctrl+C.
-  # cursor . may return immediately (Cursor already running), so we can't rely
-  # on its exit to gate MCP server lifetime. Instead we keep the server up and
-  # let the user Ctrl+C when done.
   echo "[$TOOL_LABEL] MCP server running on port $MCP_PORT"
   echo "[$TOOL_LABEL]"
   echo "[$TOOL_LABEL] To activate dual-graph in Cursor (one-time setup):"
@@ -1653,8 +1765,19 @@ if [[ "$ASSISTANT" == "cursor" ]]; then
   echo "[$TOOL_LABEL] Opening project in Cursor..."
   "$CURSOR_BIN" "$PROJECT" 2>"$DATA_DIR/assistant_stderr.log" &
   echo "[$TOOL_LABEL] Press Ctrl+C to stop the MCP server when you are done."
-  # Reset trap to exit cleanly on first Ctrl+C (INT trap must call exit, otherwise
-  # the while loop re-enters and the trap fires on every keypress).
+  trap 'echo ""; echo "[$TOOL_LABEL] Shutting down MCP server (PID $MCP_PID)..."; kill "$MCP_PID" 2>/dev/null; rm -f "$DATA_DIR/mcp_server.pid" "$DATA_DIR/mcp_port"; exit 0' INT TERM HUP
+  while true; do sleep 5 & wait $!; done
+elif [[ "$ASSISTANT" == "copilot" ]]; then
+  # VS Code is an IDE — open project and keep MCP server alive until Ctrl+C.
+  echo "[$TOOL_LABEL] MCP server running on port $MCP_PORT"
+  echo "[$TOOL_LABEL]"
+  echo "[$TOOL_LABEL] To activate dual-graph in VS Code (one-time setup):"
+  echo "[$TOOL_LABEL]   Copilot Chat panel -> Agent mode -> enable 'dual-graph'"
+  echo "[$TOOL_LABEL]   Then reload VS Code — dual-graph will connect automatically."
+  echo "[$TOOL_LABEL]"
+  echo "[$TOOL_LABEL] Opening project in VS Code..."
+  "$CODE_BIN" "$PROJECT" 2>"$DATA_DIR/assistant_stderr.log" &
+  echo "[$TOOL_LABEL] Press Ctrl+C to stop the MCP server when you are done."
   trap 'echo ""; echo "[$TOOL_LABEL] Shutting down MCP server (PID $MCP_PID)..."; kill "$MCP_PID" 2>/dev/null; rm -f "$DATA_DIR/mcp_server.pid" "$DATA_DIR/mcp_port"; exit 0' INT TERM HUP
   while true; do sleep 5 & wait $!; done
 elif [[ -n "$RESUME_ID" ]]; then
@@ -1705,10 +1828,12 @@ if [[ "$ASSISTANT_EXIT" -ne 0 && "$ASSISTANT_EXIT" -ne 130 && "$ASSISTANT_EXIT" 
   fi
   echo "[$TOOL_LABEL] Troubleshooting:"
   case "$ASSISTANT" in
-    claude) echo "[$TOOL_LABEL]   1. Update Claude Code: npm install -g @anthropic-ai/claude-code" ;;
-    codex)  echo "[$TOOL_LABEL]   1. Update Codex: npm install -g @openai/codex" ;;
-    cursor) echo "[$TOOL_LABEL]   1. Reinstall Cursor from https://www.cursor.com" ;;
-    gemini) echo "[$TOOL_LABEL]   1. Update Gemini CLI: npm install -g @google/gemini-cli" ;;
+    claude)   echo "[$TOOL_LABEL]   1. Update Claude Code: npm install -g @anthropic-ai/claude-code" ;;
+    codex)    echo "[$TOOL_LABEL]   1. Update Codex: npm install -g @openai/codex" ;;
+    cursor)   echo "[$TOOL_LABEL]   1. Reinstall Cursor from https://www.cursor.com" ;;
+    gemini)   echo "[$TOOL_LABEL]   1. Update Gemini CLI: npm install -g @google/gemini-cli" ;;
+    opencode) echo "[$TOOL_LABEL]   1. Update OpenCode: npm install -g opencode" ;;
+    copilot)  echo "[$TOOL_LABEL]   1. Reinstall VS Code from https://code.visualstudio.com" ;;
   esac
   echo "[$TOOL_LABEL]   2. Try running '$ASSISTANT' directly to see if it works"
   echo "[$TOOL_LABEL]   3. Run $TOOL_LABEL again — it may be a transient issue"

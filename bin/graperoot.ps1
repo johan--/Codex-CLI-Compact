@@ -7,6 +7,8 @@
 #   graperoot [path] --codex     OpenAI Codex
 #   graperoot [path] --cursor    Cursor IDE
 #   graperoot [path] --gemini    Google Gemini CLI
+#   graperoot [path] --opencode  OpenCode
+#   graperoot [path] --copilot   GitHub Copilot (VS Code)
 
 param(
     [Parameter(Position = 0)] [string]$Arg0 = ".",
@@ -30,6 +32,8 @@ if ($Arg0 -in @("--help","-h","?","/?")) {
     Write-Host "    --codex     OpenAI Codex  (shorthand: dg  [path])"
     Write-Host "    --cursor    Cursor IDE"
     Write-Host "    --gemini    Google Gemini CLI"
+    Write-Host "    --opencode  OpenCode"
+    Write-Host "    --copilot   GitHub Copilot (VS Code)"
     Write-Host ""
     Write-Host "  Options:"
     Write-Host "    --resume <id>    Resume a previous claude / codex session"
@@ -39,6 +43,8 @@ if ($Arg0 -in @("--help","-h","?","/?")) {
     Write-Host "    graperoot . --claude"
     Write-Host "    graperoot C:\my\project --cursor"
     Write-Host "    graperoot C:\my\project --gemini"
+    Write-Host "    graperoot C:\my\project --opencode"
+    Write-Host "    graperoot C:\my\project --copilot"
     Write-Host "    graperoot C:\my\project --claude --resume <session-id>"
     Write-Host "    dgc .                        # same as graperoot . --claude"
     Write-Host "    dg  .                        # same as graperoot . --codex"
@@ -57,10 +63,12 @@ $ProjectPath = ""
 $Passthrough = @()
 
 foreach ($arg in @($Arg0, $Arg1, $Arg2)) {
-    if ($arg -in @("--claude","claude"))   { $Assistant = "claude";  continue }
-    if ($arg -in @("--codex","codex"))     { $Assistant = "codex";   continue }
-    if ($arg -in @("--cursor","cursor"))   { $Assistant = "cursor";  continue }
-    if ($arg -in @("--gemini","gemini"))   { $Assistant = "gemini";  continue }
+    if ($arg -in @("--claude","claude"))     { $Assistant = "claude";   continue }
+    if ($arg -in @("--codex","codex"))       { $Assistant = "codex";    continue }
+    if ($arg -in @("--cursor","cursor"))     { $Assistant = "cursor";   continue }
+    if ($arg -in @("--gemini","gemini"))     { $Assistant = "gemini";   continue }
+    if ($arg -in @("--opencode","opencode")) { $Assistant = "opencode"; continue }
+    if ($arg -in @("--copilot","copilot"))   { $Assistant = "copilot";  continue }
     if ($arg -and $arg -ne ".") {
         if ($arg.StartsWith("--")) { $Passthrough += $arg }
         elseif (-not $ProjectPath) { $ProjectPath = $arg }
@@ -359,6 +367,105 @@ if ($Assistant -eq "gemini") {
     Write-Host "[$Tool] Starting gemini..."
     Write-Host ""
     gemini
+}
+
+# -- OpenCode: write project opencode.json and launch -------------------------
+if ($Assistant -eq "opencode") {
+    # Auto-install opencode if missing
+    if (-not (Get-Command opencode -ErrorAction SilentlyContinue)) {
+        Write-Host "[$Tool] opencode not found - installing..."
+        try { npm install -g opencode 2>&1 | Out-Null } catch {}
+        if (-not (Get-Command opencode -ErrorAction SilentlyContinue)) {
+            Write-Host "[$Tool] ERROR: could not auto-install opencode."
+            Write-Host "[$Tool]   npm install -g opencode"
+            Stop-Process -Id $mcpProc.Id -Force -ErrorAction SilentlyContinue
+            exit 1
+        }
+        Write-Host "[$Tool] opencode installed."
+    }
+
+    # Write MCP entry into project-level opencode.json
+    $OpenCodeConf = Join-Path $ProjectPath "opencode.json"
+    $ocMcp    = [PSCustomObject]@{}
+    $ocSchema = "https://opencode.ai/config.json"
+    if (Test-Path $OpenCodeConf) {
+        try {
+            $parsed = Get-Content $OpenCodeConf -Raw | ConvertFrom-Json
+            if ($parsed.mcp)       { $ocMcp    = $parsed.mcp }
+            if ($parsed.'$schema') { $ocSchema = $parsed.'$schema' }
+        } catch {}
+    }
+    $ocMcp | Add-Member -NotePropertyName "dual-graph" `
+        -NotePropertyValue ([PSCustomObject]@{ type = "remote"; url = "http://localhost:$McpPort/mcp"; enabled = $true }) -Force
+    $ocOut = [PSCustomObject]@{}
+    $ocOut | Add-Member -NotePropertyName '$schema' -NotePropertyValue $ocSchema
+    $ocOut | Add-Member -NotePropertyName 'mcp'     -NotePropertyValue $ocMcp
+    $ocOut | ConvertTo-Json -Depth 5 | Set-Content -Path $OpenCodeConf -Encoding UTF8
+
+    Write-Host "[$Tool] MCP config written -> $OpenCodeConf"
+    Write-Host "[$Tool] MCP URL: http://localhost:$McpPort/mcp"
+    Write-Host ""
+
+    Set-Location $ProjectPath
+    Write-Host "[$Tool] Starting opencode..."
+    Write-Host ""
+    opencode
+}
+
+# -- Copilot: write .vscode/mcp.json and open VS Code -------------------------
+if ($Assistant -eq "copilot") {
+    # Find VS Code CLI
+    $CodeBin = $null
+    $candidates = @(
+        (Join-Path $env:LOCALAPPDATA "Programs\Microsoft VS Code\bin\code.cmd"),
+        (Join-Path $env:LOCALAPPDATA "Programs\Microsoft VS Code\Code.exe"),
+        "code"
+    )
+    foreach ($c in $candidates) {
+        if ($c -eq "code") {
+            if (Get-Command code -ErrorAction SilentlyContinue) { $CodeBin = "code"; break }
+        } elseif (Test-Path $c) {
+            $CodeBin = $c; break
+        }
+    }
+    if (-not $CodeBin) {
+        Write-Host "[$Tool] ERROR: VS Code CLI ('code') not found."
+        Write-Host "[$Tool]   Install from https://code.visualstudio.com"
+        Write-Host "[$Tool]   Then: Ctrl+Shift+P -> 'Shell Command: Install code command'"
+        Stop-Process -Id $mcpProc.Id -Force -ErrorAction SilentlyContinue
+        exit 1
+    }
+
+    # Write .vscode/mcp.json
+    $VsCodeDir = Join-Path $ProjectPath ".vscode"
+    New-Item -ItemType Directory -Force -Path $VsCodeDir | Out-Null
+    $McpJson = Join-Path $VsCodeDir "mcp.json"
+    $vsConf = [PSCustomObject]@{ servers = [PSCustomObject]@{} }
+    if (Test-Path $McpJson) {
+        try { $vsConf = Get-Content $McpJson -Raw | ConvertFrom-Json } catch {}
+    }
+    if (-not $vsConf.servers) { $vsConf | Add-Member -NotePropertyName "servers" -NotePropertyValue ([PSCustomObject]@{}) -Force }
+    $vsConf.servers | Add-Member -NotePropertyName "dual-graph" `
+        -NotePropertyValue ([PSCustomObject]@{ type = "http"; url = "http://localhost:$McpPort/mcp" }) -Force
+    $vsConf | ConvertTo-Json -Depth 5 | Set-Content -Path $McpJson -Encoding UTF8
+
+    Write-Host "[$Tool] MCP config written -> $McpJson"
+    Write-Host "[$Tool] MCP URL: http://localhost:$McpPort/mcp"
+    Write-Host ""
+    Write-Host "[$Tool] NOTE: enable dual-graph in VS Code (one-time setup):"
+    Write-Host "[$Tool]   Copilot Chat panel -> Agent mode -> enable 'dual-graph'"
+    Write-Host ""
+    Write-Host "[$Tool] Opening project in VS Code..."
+
+    if ($CodeBin -eq "code") {
+        Start-Process "code" -ArgumentList $ProjectPath
+    } else {
+        Start-Process $CodeBin -ArgumentList $ProjectPath
+    }
+
+    Write-Host "[$Tool] MCP server running on port $McpPort"
+    Write-Host "[$Tool] Press Ctrl+C to stop the MCP server when you are done."
+    try { $mcpProc.WaitForExit() } catch { Start-Sleep -Seconds 86400 }
 }
 
 # Cleanup

@@ -1,3 +1,7 @@
+3.9.29
+- Added: graperoot --opencode support (writes project opencode.json, launches opencode TUI)
+- Added: graperoot --copilot support (writes .vscode/mcp.json, opens VS Code)
+
 3.9.28
 - Fixed: MCP server crash on Windows — removed `from __future__ import annotations`; string annotations bypassed mcp's get_origin guard causing issubclass() TypeError
 
