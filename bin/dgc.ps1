@@ -529,6 +529,17 @@ try {
             }
         }
     }
+    # Remove conflicting dg.exe from Python Scripts (old graperoot installed it; renamed to dg-graph in 3.9.34+)
+    try {
+        $pipScripts = & $Python -c "import sysconfig; print(sysconfig.get_path('scripts'))" 2>$null
+        if ($pipScripts) {
+            $conflictDg = Join-Path $pipScripts "dg.exe"
+            if (Test-Path $conflictDg) {
+                Remove-Item $conflictDg -Force -ErrorAction SilentlyContinue
+            }
+        }
+    } catch {}
+
     # Delete .py source files once compiled package confirmed working
     if ($grapeOk) {
         @("graph_builder.py", "dg.py", "mcp_graph_server.py", "context_packer.py", "dgc_claude.py") | ForEach-Object {

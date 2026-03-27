@@ -203,6 +203,17 @@ Write-Host "[$Tool] Project : $ProjectPath"
 Write-Host "[$Tool] Data    : $DataDir"
 Write-Host ""
 
+# -- Remove conflicting dg.exe if present (old graperoot installed it; renamed to dg-graph in 3.9.34+) --
+try {
+    $pipScripts = & $Python -c "import sysconfig; print(sysconfig.get_path('scripts'))" 2>$null
+    if ($pipScripts) {
+        $conflictDg = Join-Path $pipScripts "dg.exe"
+        if (Test-Path $conflictDg) {
+            Remove-Item $conflictDg -Force -ErrorAction SilentlyContinue
+        }
+    }
+} catch {}
+
 # -- Build graph ----------------------------------------------------------------
 $GraphExe = Join-Path $DG "venv\Scripts\graph_builder.exe"
 $GraphPy  = $null

@@ -1,3 +1,6 @@
+3.9.35
+- Fixed: dg.exe conflict on Windows now self-heals on any graperoot invocation (dgc, dg, graperoot --cursor/gemini/opencode/copilot all remove stale dg.exe automatically)
+
 3.9.34
 - Fixed: graperoot --gemini on Windows wrote settings.json with UTF-8 BOM causing invalid JSON error; now written via Python (no BOM)
 - Fixed: graperoot --gemini / --opencode on Windows now show live install progress (was silently piped to Out-Null, looked frozen)
