@@ -1,3 +1,6 @@
+3.9.28
+- Fixed: MCP server crash on Windows — removed `from __future__ import annotations`; string annotations bypassed mcp's get_origin guard causing issubclass() TypeError
+
 3.9.27
 - Fixed: MCP server crash on Windows — added `from __future__ import annotations` to fix TypeError: issubclass() arg 1 must be a class with older mcp library versions
 
