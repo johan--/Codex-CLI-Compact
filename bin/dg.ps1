@@ -10,7 +10,6 @@ $DG = Join-Path $env:USERPROFILE ".dual-graph"
 $Tool = "dg"
 $R2 = "https://pub-18426978d5a14bf4a60ddedd7d5b6dab.r2.dev"
 $BaseUrl = "https://raw.githubusercontent.com/kunal12203/Codex-CLI-Compact/main"
-$WebhookUrl = "https://script.google.com/macros/s/AKfycbyq_5igbBUORhSqMNktAoX2GQg8BadKcYZOTV-XRUr3vbY3QuK7jjS8EWLg_pZyMDuD/exec"
 $Python = Join-Path $DG "venv\Scripts\python.exe"
 $NoticeFile = Join-Path $DG "last_update_notice.txt"
 
@@ -37,19 +36,6 @@ function Get-MachineId {
         return $mid
     } catch {}
     return "unknown"
-}
-
-function Send-CliError([string]$Step, [string]$Message) {
-    try {
-        $payload = @{
-            type          = "cli_error"
-            platform      = "windows"
-            machine_id    = (Get-MachineId)
-            error_message = $Message
-            script_step   = $Step
-        }
-        Invoke-RestMethod -Method Post -Uri $WebhookUrl -ContentType "application/json" -Body ($payload | ConvertTo-Json -Compress) -TimeoutSec 5 -ErrorAction SilentlyContinue | Out-Null
-    } catch {}
 }
 
 function Get-Text([string]$Uri) {
@@ -341,7 +327,6 @@ try {
             $msg = "No Python 3.10+ found. Install from https://python.org/downloads"
             Write-Host "[$Tool] ERROR: $msg"
             Write-Host "[$Tool] After installing, close and reopen your terminal, then run dg again."
-            Send-CliError "Checking prerequisites" $msg
             throw $msg
         }
         $pyVer = if ($foundPy -eq "py -3") { & py -3 --version 2>$null } else { & $foundPy --version 2>$null }
@@ -353,7 +338,6 @@ try {
         } else {
             $msg = "All venv creation methods failed (python=$foundPy). Install Python from https://python.org/downloads"
             Write-Host "[$Tool] ERROR: $msg"
-            Send-CliError "Preparing Python environment" $msg
             throw $msg
         }
 
@@ -366,7 +350,6 @@ try {
         }
         if ($pipExit -ne 0) {
             $msg = "pip install failed (exit $pipExit)"
-            Send-CliError "Preparing Python environment" $msg
             throw $msg
         }
         Write-Host "[$Tool] Dependencies installed."
@@ -393,7 +376,6 @@ try {
             if ((Invoke-NativeQuiet $pip @("install", "graperoot", "--upgrade", "--quiet", "--no-cache-dir")) -eq 0) {
                 $grapeOk = $true
             } else {
-                Send-CliError "Installing graperoot" "graperoot install failed with no .py fallback in dg.ps1"
                 throw "graperoot install failed and no .py fallback available. Run: pip install graperoot"
             }
         }
@@ -455,7 +437,6 @@ try {
             $tail = ((Get-Content $scanErr -Tail 20 -ErrorAction SilentlyContinue) -join " ") -replace '\s+', ' '
             if ($tail.Length -gt 700) { $tail = $tail.Substring(0, 700) }
         }
-        Send-CliError "Scanning project" "Project scan failed in dg.ps1: $tail"
         throw "project scan failed"
     }
     if (Test-Path $scanErr) { Remove-Item $scanErr -Force -ErrorAction SilentlyContinue }
@@ -497,7 +478,6 @@ try {
         Set-Content -Path $portFile -Value "$port" -Encoding UTF8
         if (-not (Wait-Port -Port $port -Tries 15)) {
             Stop-McpServer $pidFile $portFile
-            Send-CliError "Starting MCP server" "MCP server did not start in dg.ps1 (retried)"
             throw "MCP server did not start after retry"
         }
         Write-Host "[$Tool] MCP server recovered on port $port."
@@ -515,7 +495,6 @@ try {
         $env:PATH = "$env:PATH;$(npm config get prefix 2>$null)\node_modules\.bin"
         if (-not (Get-Command codex -ErrorAction SilentlyContinue)) {
             Stop-McpServer $pidFile $portFile
-            Send-CliError "Registering MCP" "codex CLI not found, auto-install failed"
             Write-Host "[$Tool] ERROR: could not auto-install codex CLI."
             Write-Host "[$Tool]   npm install -g @openai/codex"
             exit 1
@@ -528,7 +507,6 @@ try {
     if (-not $npxCmd) { $npxCmd = (Get-Command npx -ErrorAction SilentlyContinue).Source }
     if (-not $npxCmd) {
         Stop-McpServer $pidFile $portFile
-        Send-CliError "Registering MCP" "npx not found - needed for mcp-remote bridge"
         Write-Host "[$Tool] Error: npx not found. Install Node.js from https://nodejs.org"
         exit 1
     }
@@ -555,7 +533,6 @@ try {
     }
     if ($mcpAddExit -ne 0) {
         Stop-McpServer $pidFile $portFile
-        Send-CliError "Registering MCP" "MCP registration failed after auto-fix in dg.ps1"
         Write-Host "[$Tool] Error: failed to register MCP with codex after auto-fix."
         Write-Host "[$Tool] Manual fix:"
         Write-Host "[$Tool]   npm install -g @openai/codex mcp-remote"
@@ -592,7 +569,6 @@ try {
     exit $codexExit
 } catch {
     $message = "$($_.Exception.Message)"
-    if ($message) { Send-CliError "Launcher" $message }
     Write-Host "[$Tool] Error: $message" -ForegroundColor Red
     exit 1
 }

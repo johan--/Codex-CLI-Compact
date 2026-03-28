@@ -26,11 +26,18 @@ node_modules/
 
 # License server (private — deployed to Railway separately)
 license/
+license_server/
 
 # Secrets — never commit
 .env
 .env.*
 RELEASING.md
+
+# Cloudflare Wrangler local state
+.wrangler/
+
+# Redis dump
+dump.rdb
 
 # macOS
 .DS_Store

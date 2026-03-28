@@ -54,7 +54,6 @@ if ($Arg0 -in @("--help","-h","?","/?")) {
 
 $DG          = Join-Path $env:USERPROFILE ".dual-graph"
 $BaseUrl     = "https://raw.githubusercontent.com/kunal12203/Codex-CLI-Compact/main"
-$WebhookUrl  = "https://script.google.com/macros/s/AKfycbyq_5igbBUORhSqMNktAoX2GQg8BadKcYZOTV-XRUr3vbY3QuK7jjS8EWLg_pZyMDuD/exec"
 $Tool        = "graperoot"
 
 # -- Parse args: find assistant flag, project path, passthrough ----------------
@@ -155,14 +154,6 @@ if (-not (Test-Path $DgcPs1)) {
 }
 
 # -- Shared helpers -------------------------------------------------------------
-function Send-CliError([string]$Step, [string]$Message) {
-    try {
-        $payload = @{ type="cli_error"; platform="windows"; error_message=$Message; script_step=$Step }
-        Invoke-RestMethod -Method Post -Uri $WebhookUrl -ContentType "application/json" `
-            -Body ($payload | ConvertTo-Json -Compress) -TimeoutSec 5 -ErrorAction SilentlyContinue | Out-Null
-    } catch {}
-}
-
 function Get-FreePort {
     for ($port = 8080; $port -le 8199; $port++) {
         try {

@@ -1644,46 +1644,6 @@ if [[ ! -f "$_INSTALL_DATE_FILE" ]]; then
   echo ""
 fi
 
-# ── One-time feedback form ─────────────────────────────────────────────────────
-_FEEDBACK_DONE="$SCRIPT_DIR/feedback_done"
-_INSTALL_DATE_FILE="$SCRIPT_DIR/install_date.txt"
-if [[ ! -f "$_FEEDBACK_DONE" ]] && [[ -t 0 ]]; then
-  _SHOW_FEEDBACK=1
-  if [[ -f "$_INSTALL_DATE_FILE" ]]; then
-    _INSTALL_DATE="$(cat "$_INSTALL_DATE_FILE")"
-    if ! python3 - "$_INSTALL_DATE" <<'PY' >/dev/null 2>&1; then
-from datetime import date
-import sys
-try:
-    install = date.fromisoformat(sys.argv[1].strip())
-    ready = (date.today() - install).days >= 2
-    raise SystemExit(0 if ready else 1)
-except Exception:
-    raise SystemExit(1)
-PY
-      _SHOW_FEEDBACK=0
-    fi
-  fi
-  if [[ "$_SHOW_FEEDBACK" == "1" ]]; then
-    echo "===================================================="
-    echo "  One quick question before we start (asked once only)"
-    echo "===================================================="
-    printf "  How useful has Graperoot been so far? (1-5): "
-    read -r _FB_RATING < /dev/tty || _FB_RATING=""
-    printf "  Anything you'd improve? (press Enter to skip): "
-    read -r _FB_IMPROVE < /dev/tty || _FB_IMPROVE=""
-    _MACHINE_ID="$(cat "$SCRIPT_DIR/identity.json" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('machine_id','unknown'))" 2>/dev/null || echo "unknown")"
-    curl -sf -X POST "https://script.google.com/macros/s/AKfycbzsOnvAiDTdhDaW73ErztJztPqT25WOCFn29VzrRYZRhBUIwHRu677DoATctAEiq6dp4Q/exec" \
-      -H "Content-Type: application/json" \
-      -d "{\"rating\":\"$_FB_RATING\",\"improve\":\"$_FB_IMPROVE\",\"machine_id\":\"$_MACHINE_ID\"}" \
-      >/dev/null 2>&1 || true
-    touch "$_FEEDBACK_DONE"
-    echo "  Thanks! You won't see this again."
-    echo "===================================================="
-    echo ""
-  fi
-fi
-# ──────────────────────────────────────────────────────────────────────────────
 
 # ── Pre-flight checks ────────────────────────────────────────────────────────
 CURRENT_STEP="Pre-flight checks"

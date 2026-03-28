@@ -26,10 +26,8 @@ $Tool = "dgc"
 $PolicyMarker = "dgc-policy-v11"
 $R2 = "https://pub-18426978d5a14bf4a60ddedd7d5b6dab.r2.dev"
 $BaseUrl = "https://raw.githubusercontent.com/kunal12203/Codex-CLI-Compact/main"
-$WebhookUrl = "https://script.google.com/macros/s/AKfycbyq_5igbBUORhSqMNktAoX2GQg8BadKcYZOTV-XRUr3vbY3QuK7jjS8EWLg_pZyMDuD/exec"
 $Python = Join-Path $DG "venv\Scripts\python.exe"
 $NoticeFile = Join-Path $DG "last_update_notice.txt"
-$FeedbackUrl = "https://script.google.com/macros/s/AKfycbzsOnvAiDTdhDaW73ErztJztPqT25WOCFn29VzrRYZRhBUIwHRu677DoATctAEiq6dp4Q/exec"
 
 function Get-MachineId {
     $identityPath = Join-Path $DG "identity.json"
@@ -54,19 +52,6 @@ function Get-MachineId {
         return $mid
     } catch {}
     return "unknown"
-}
-
-function Send-CliError([string]$Step, [string]$Message) {
-    try {
-        $payload = @{
-            type          = "cli_error"
-            platform      = "windows"
-            machine_id    = (Get-MachineId)
-            error_message = $Message
-            script_step   = $Step
-        }
-        Invoke-RestMethod -Method Post -Uri $WebhookUrl -ContentType "application/json" -Body ($payload | ConvertTo-Json -Compress) -TimeoutSec 5 -ErrorAction SilentlyContinue | Out-Null
-    } catch {}
 }
 
 function Get-Text([string]$Uri) {
@@ -436,7 +421,6 @@ try {
             $msg = "No Python 3.10+ found. Install from https://python.org/downloads"
             Write-Host "[$Tool] ERROR: $msg"
             Write-Host "[$Tool] After installing, close and reopen your terminal, then run dgc again."
-            Send-CliError "Checking prerequisites" $msg
             throw $msg
         }
         $pyVer = if ($foundPy -eq "py -3") { & py -3 --version 2>$null } else { & $foundPy --version 2>$null }
@@ -448,7 +432,6 @@ try {
         } else {
             $msg = "All venv creation methods failed (python=$foundPy). Install Python from https://python.org/downloads"
             Write-Host "[$Tool] ERROR: $msg"
-            Send-CliError "Preparing Python environment" $msg
             throw $msg
         }
 
@@ -462,7 +445,6 @@ try {
         }
         if ($pipExit -ne 0) {
             $msg = "pip install failed (exit $pipExit)"
-            Send-CliError "Preparing Python environment" $msg
             throw $msg
         }
         Write-Host "[$Tool] Dependencies installed."
@@ -524,7 +506,6 @@ try {
             if ((Invoke-NativeQuiet $pip @("install", "graperoot", "--upgrade", "--quiet", "--no-cache-dir")) -eq 0) {
                 $grapeOk = $true
             } else {
-                Send-CliError "Installing graperoot" "graperoot install failed with no .py fallback in dgc.ps1"
                 throw "graperoot install failed and no .py fallback available. Run: pip install graperoot"
             }
         }
@@ -552,7 +533,6 @@ try {
         $msg = "Project path not found: $ProjectPath"
         Write-Host "[$Tool] ERROR: $msg" -ForegroundColor Red
         Write-Host "[$Tool] Check that the path exists and try again."
-        Send-CliError "Validating project path" $msg
         Stop-McpServer $pidFile $portFile
         exit 1
     }
@@ -723,7 +703,6 @@ Keep ``CONTEXT.md`` under 20 lines total. Do NOT summarize the full conversation
             $tail = ((Get-Content $scanErr -Tail 20 -ErrorAction SilentlyContinue) -join " ") -replace '\s+', ' '
             if ($tail.Length -gt 700) { $tail = $tail.Substring(0, 700) }
         }
-        Send-CliError "Scanning project" "Project scan failed in dgc.ps1: $tail"
         throw "project scan failed"
     }
     if (Test-Path $scanErr) { Remove-Item $scanErr -Force -ErrorAction SilentlyContinue }
@@ -774,7 +753,6 @@ Keep ``CONTEXT.md`` under 20 lines total. Do NOT summarize the full conversation
     Set-Content -Path $portFile -Value "$port" -Encoding UTF8
     if (-not (Wait-Port -Port $port)) {
         Stop-McpServer $pidFile $portFile
-        Send-CliError "Starting MCP server" "MCP server did not start in dgc.ps1"
         throw "MCP server did not start"
     }
     Write-Host "[$Tool] MCP server ready on port $port."
@@ -786,7 +764,6 @@ Keep ``CONTEXT.md`` under 20 lines total. Do NOT summarize the full conversation
         $msg = "Claude Code CLI not found in PATH. Install it with: npm install -g @anthropic-ai/claude-code"
         Write-Host "[$Tool] ERROR: $msg" -ForegroundColor Red
         Write-Host "[$Tool] After installing, close and reopen your terminal, then run dgc again."
-        Send-CliError "Checking prerequisites" $msg
         Stop-McpServer $pidFile $portFile
         exit 1
     }
@@ -803,7 +780,6 @@ Keep ``CONTEXT.md`` under 20 lines total. Do NOT summarize the full conversation
     }
     if ($mcpAddExit -ne 0) {
         Stop-McpServer $pidFile $portFile
-        Send-CliError "Registering MCP" "MCP registration failed in dgc.ps1"
         Write-Host "[$Tool] Error: failed to register MCP in Claude."
         Write-Host "[$Tool] Try this:"
         Write-Host "[$Tool] 1. Update Claude Code CLI:"
@@ -1053,7 +1029,6 @@ if ($transcript -and (Test-Path $transcript)) {
     }
     # Ignore normal user-initiated termination: SIGINT/Ctrl+C (130) and Windows CTRL_C_EVENT (-1073741510 / 0xC000013A)
     if ($claudeExit -ne 0 -and $claudeExit -ne 130 -and $claudeExit -ne -1073741510) {
-        Send-CliError "Running Claude" "Claude exited with code $claudeExit in dgc.ps1"
     }
 
     # Restore strict error handling for cleanup
@@ -1084,7 +1059,6 @@ if ($transcript -and (Test-Path $transcript)) {
     $location = if ($_.InvocationInfo -and $_.InvocationInfo.ScriptLineNumber) { " [line $($_.InvocationInfo.ScriptLineNumber)]" } else { "" }
     $detail = "$message$location"
     if ($detail.Length -gt 700) { $detail = $detail.Substring(0, 700) }
-    if ($detail) { Send-CliError "Launcher" $detail }
     Write-Host "[$Tool] Error: $message" -ForegroundColor Red
     exit 1
 }
