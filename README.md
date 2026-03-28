@@ -231,6 +231,14 @@ Have a question, found a bug, or want to share feedback?
 
 ---
 
+## Acknowledgements
+
+A huge thank you to everyone who used early versions of Dual-Graph and shared feedback through the telemetry program — your usage data helped us squash bugs and stabilize the tool into what it is today. We've now removed all telemetry in favor of full transparency.
+
+Want to keep helping shape the project? **[Join the Discord](https://discord.gg/ptyr7KJz)**
+
+---
+
 ## License
 
 The launcher scripts and tooling in this repository are licensed under the [Apache License 2.0](./LICENSE).
