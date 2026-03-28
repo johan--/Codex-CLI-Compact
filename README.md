@@ -210,6 +210,14 @@ Remove-Item "$env:USERPROFILE\.claude\token-counter-stop.ps1" -Force -ErrorActio
 
 ---
 
+## Contributing
+
+The launcher scripts (`bin/`) are open source under Apache 2.0. PRs are welcome — bug fixes, new AI assistant support, install improvements, docs.
+
+**Note:** The graph engine ([`graperoot`](https://pypi.org/project/graperoot/)) is a separate proprietary component distributed via PyPI. The launcher scripts and tooling in this repo are fully open source; the core graph intelligence is not.
+
+---
+
 ## Community
 
 Have a question, found a bug, or want to share feedback?
@@ -220,3 +228,11 @@ Have a question, found a bug, or want to share feedback?
 - Report bugs
 - Share workflows
 - Follow releases
+
+---
+
+## License
+
+The launcher scripts and tooling in this repository are licensed under the [Apache License 2.0](./LICENSE).
+
+The `graperoot` graph engine (installed as a PyPI dependency) is proprietary and not covered by this license.
