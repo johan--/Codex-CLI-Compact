@@ -67,16 +67,26 @@ function Get-Text([string]$Uri) {
 }
 
 function Download-File([string]$Primary, [string]$Fallback, [string]$OutFile) {
+    # Download to a temp file first, then move atomically — prevents corrupt partial writes
+    # if the network drops mid-download (which would leave $OutFile half-written and unparseable).
+    $tmp = $OutFile + ".tmp"
     try {
-        Invoke-WebRequest $Primary -OutFile $OutFile -UseBasicParsing -TimeoutSec 15
-        return $true
-    } catch {
-        if ($Fallback) {
-            try {
-                Invoke-WebRequest $Fallback -OutFile $OutFile -UseBasicParsing -TimeoutSec 15
-                return $true
-            } catch {}
+        Invoke-WebRequest $Primary -OutFile $tmp -UseBasicParsing -TimeoutSec 15
+        if ((Test-Path $tmp) -and (Get-Item $tmp).Length -gt 0) {
+            Move-Item $tmp $OutFile -Force
+            return $true
         }
+    } catch {}
+    Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+    if ($Fallback) {
+        try {
+            Invoke-WebRequest $Fallback -OutFile $tmp -UseBasicParsing -TimeoutSec 15
+            if ((Test-Path $tmp) -and (Get-Item $tmp).Length -gt 0) {
+                Move-Item $tmp $OutFile -Force
+                return $true
+            }
+        } catch {}
+        Remove-Item $tmp -Force -ErrorAction SilentlyContinue
     }
     return $false
 }
