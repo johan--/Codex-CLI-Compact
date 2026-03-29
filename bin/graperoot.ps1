@@ -1,4 +1,4 @@
-﻿# graperoot.ps1 - Windows launcher for Dual-Graph with AI tool selection
+# graperoot.ps1 - Windows launcher for Dual-Graph with AI tool selection
 # Handles --cursor and --gemini directly.
 # For --claude and --codex, delegates to dgc.ps1 / dg.ps1.
 #
@@ -113,7 +113,7 @@ try { $_RemoteVer = (Invoke-WebRequest "$_R2/version.txt" -UseBasicParsing -Time
 }
 if ($_RemoteVer -and ($_LocalVer -eq "0" -or ([version]$_RemoteVer -gt [version]$_LocalVer))) {
     Write-Host "[$Tool] Update available: $_LocalVer -> $_RemoteVer ... updating"
-    # Atomic R2-first download: write to .tmp, validate size, then move — prevents corrupt partial writes.
+    # Atomic R2-first download: write to .tmp, validate size, then move  -  prevents corrupt partial writes.
     # R2 is trusted (no CDN cache), so no ScriptBlock parse check needed.
     # GitHub is fallback in case R2 is unreachable.
     function _dl([string]$R2Url, [string]$GhUrl, [string]$OutFile) {
@@ -140,7 +140,7 @@ if ($_RemoteVer -and ($_LocalVer -eq "0" -or ([version]$_RemoteVer -gt [version]
     Write-Host "[$Tool] Updated to $_RemoteVer. Restarting..."
     $_newScript = Join-Path $DG "graperoot.ps1"
     if (Test-Path $_newScript) {
-        # Filter empty strings — splatting "" to a typed [string] param causes coercion errors
+        # Filter empty strings  -  splatting "" to a typed [string] param causes coercion errors
         $_restartArgs = @($Arg0, $Arg1, $Arg2) | Where-Object { $_ }
         if ($Resume) { $_restartArgs += "--resume"; $_restartArgs += $Resume }
         & $_newScript @_restartArgs; exit $LASTEXITCODE
@@ -217,7 +217,7 @@ try {
     }
 } catch {}
 
-# -- ripgrep (rg) required by fallback_rg MCP tool — install if missing --------
+# -- ripgrep (rg) required by fallback_rg MCP tool  -  install if missing --------
 if (-not (Get-Command rg -ErrorAction SilentlyContinue)) {
     Write-Host "[$Tool] Installing ripgrep (required for code search)..."
     $rgInstalled = $false
@@ -236,7 +236,7 @@ if (-not (Get-Command rg -ErrorAction SilentlyContinue)) {
         }
     } catch {}
     if (-not $rgInstalled -and -not (Get-Command rg -ErrorAction SilentlyContinue)) {
-        Write-Host "[$Tool] WARNING: ripgrep (rg) not found — fallback_rg search may fail. Install: https://github.com/BurntSushi/ripgrep"
+        Write-Host "[$Tool] WARNING: ripgrep (rg) not found  -  fallback_rg search may fail. Install: https://github.com/BurntSushi/ripgrep"
     }
 }
 

@@ -43,7 +43,7 @@ function Get-MachineId {
             }
         }
     } catch {}
-    # No identity.json or no machine_id — generate a random one and save it
+    # No identity.json or no machine_id  -  generate a random one and save it
     try {
         $mid = [System.Guid]::NewGuid().ToString("N")
         $identity = @{ machine_id = $mid; platform = "windows"; installed_date = (Get-Date -Format "yyyy-MM-dd"); tool = "launcher-ps1" }
@@ -67,7 +67,7 @@ function Get-Text([string]$Uri) {
 }
 
 function Download-File([string]$Primary, [string]$Fallback, [string]$OutFile) {
-    # Download to a temp file first, then move atomically — prevents corrupt partial writes
+    # Download to a temp file first, then move atomically  -  prevents corrupt partial writes
     # if the network drops mid-download (which would leave $OutFile half-written and unparseable).
     $tmp = $OutFile + ".tmp"
     try {
@@ -465,10 +465,10 @@ try {
     $VenvBin = Join-Path $DG "venv\Scripts"
 
     # Kill any previous MCP server BEFORE the graperoot upgrade.
-    # pip upgrade replaces graph-builder.exe and mcp-graph-server.exe — if mcp-graph-server.exe
+    # pip upgrade replaces graph-builder.exe and mcp-graph-server.exe  -  if mcp-graph-server.exe
     # is still running, pip deletes graph-builder.exe (step 1) then hits WinError 32 on the
     # locked mcp-graph-server.exe (step 2), leaving graperoot half-uninstalled.
-    # Use taskkill /F — it kills processes from other terminal sessions where Stop-Process
+    # Use taskkill /F  -  it kills processes from other terminal sessions where Stop-Process
     # gets "Access Denied" because it only works on processes owned by the current session.
     $pidFile = Join-Path $DG "mcp_server.pid"
     $portFile = Join-Path $DG "mcp_port"
@@ -491,7 +491,7 @@ try {
     $grapeOk = $false
     $grapeBuilderExe = Join-Path $VenvBin "graph-builder.exe"
     if ((Invoke-NativeQuiet $Python @("-c", "import graperoot.graph_builder")) -eq 0) {
-        # graph_builder submodule is importable — also verify graph-builder.exe exists.
+        # graph_builder submodule is importable  -  also verify graph-builder.exe exists.
         # A partial pip upgrade deletes graph-builder.exe first, then fails on the locked
         # mcp-graph-server.exe, leaving graperoot importable but graph-builder.exe missing.
         if (Test-Path $grapeBuilderExe) {
@@ -538,7 +538,7 @@ try {
         }
     }
 
-    # ripgrep (rg) is required by the fallback_rg MCP tool — install if missing
+    # ripgrep (rg) is required by the fallback_rg MCP tool  -  install if missing
     try {
         if (-not (Get-Command rg -ErrorAction SilentlyContinue)) {
             Write-Host "[$Tool] Installing ripgrep (required for code search)..."
@@ -558,7 +558,7 @@ try {
                 }
             } catch {}
             if (-not $rgInstalled -and -not (Get-Command rg -ErrorAction SilentlyContinue)) {
-                Write-Host "[$Tool] WARNING: ripgrep (rg) not found — fallback_rg search may fail. Install: https://github.com/BurntSushi/ripgrep"
+                Write-Host "[$Tool] WARNING: ripgrep (rg) not found  -  fallback_rg search may fail. Install: https://github.com/BurntSushi/ripgrep"
             }
         }
     } catch {
@@ -619,7 +619,7 @@ try {
         $template = $null
         try { $template = Get-Text "$BaseUrl/CLAUDE.md.template" } catch {}
         if (-not $template) {
-            # Hardcoded fallback — used when GitHub is unreachable (e.g. Cloudflare-blocking ISPs)
+            # Hardcoded fallback  -  used when GitHub is unreachable (e.g. Cloudflare-blocking ISPs)
             $template = @"
 <!-- $PolicyMarker -->
 # Dual-Graph Context Policy
@@ -646,10 +646,10 @@ This project uses a local dual-graph MCP server for efficient context retrieval.
 
 1. **If ``graph_continue`` returns ``needs_project=true``**: call ``graph_scan`` with ``pwd``. Do NOT ask the user.
 
-2. **If ``graph_continue`` returns ``skip=true``**: fewer than 5 files — read only specifically named files.
+2. **If ``graph_continue`` returns ``skip=true``**: fewer than 5 files  -  read only specifically named files.
 
 3. **Read ``recommended_files``** using ``graph_read``.
-   - Always use ``file::symbol`` notation (e.g. ``src/auth.ts::handleLogin``) — never read whole files.
+   - Always use ``file::symbol`` notation (e.g. ``src/auth.ts::handleLogin``)  -  never read whole files.
    - ``recommended_files`` entries that already contain ``::`` must be passed verbatim.
 
 4. **Obey confidence caps:**
@@ -671,7 +671,7 @@ Maintain a short JSON block in your working memory. Update it after each turn:
 }
 ``````
 
-Use this state — not prose summaries — to remember what's been done across turns.
+Use this state  -  not prose summaries  -  to remember what's been done across turns.
 
 ## Token Usage
 
@@ -685,9 +685,9 @@ A ``token-counter`` MCP is available for tracking live token usage.
 
 - Do NOT use ``rg``, ``grep``, or bash file exploration before calling ``graph_continue`` (when required).
 - Do NOT do broad/recursive exploration at any confidence level.
-- ``max_supplementary_greps`` and ``max_supplementary_files`` are hard caps — never exceed them.
+- ``max_supplementary_greps`` and ``max_supplementary_files`` are hard caps  -  never exceed them.
 - Do NOT call ``graph_continue`` more than once per turn.
-- Always use ``file::symbol`` notation with ``graph_read`` — never bare filenames.
+- Always use ``file::symbol`` notation with ``graph_read``  -  never bare filenames.
 - After edits, call ``graph_register_edit`` with changed files using ``file::symbol`` notation.
 
 ## Context Store
@@ -705,7 +705,7 @@ Whenever you make a decision, identify a task, note a next step, fact, or blocke
 - Only log things worth remembering across sessions (not every minor detail)
 - ``content`` must be under 15 words
 - ``files`` lists the files this decision/task relates to (can be empty)
-- Log immediately when the item arises — not at session end
+- Log immediately when the item arises  -  not at session end
 
 ## Session End
 
@@ -714,7 +714,7 @@ When the user signals they are done (e.g. "bye", "done", "wrap up", "end session
 - **Key Decisions**: bullet list, max 3 items
 - **Next Steps**: bullet list, max 3 items
 
-Keep ``CONTEXT.md`` under 20 lines total. Do NOT summarize the full conversation — only what's needed to resume next session.
+Keep ``CONTEXT.md`` under 20 lines total. Do NOT summarize the full conversation  -  only what's needed to resume next session.
 "@
         }
         Set-Content -Path $DocFile -Value $template -Encoding UTF8
@@ -1047,7 +1047,7 @@ if ($transcript -and (Test-Path $transcript)) {
     try {
         if ($Resume) { & claude --resume $Resume } else { & claude }
         $claudeExit = $LASTEXITCODE
-        # Show resume hint — filter by project to avoid showing wrong session
+        # Show resume hint  -  filter by project to avoid showing wrong session
         try {
             $historyFile = Join-Path $env:USERPROFILE ".claude\history.jsonl"
             if (Test-Path $historyFile) {

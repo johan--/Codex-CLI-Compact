@@ -27,7 +27,7 @@ function Get-MachineId {
             }
         }
     } catch {}
-    # No identity.json or no machine_id — generate a random one and save it
+    # No identity.json or no machine_id  -  generate a random one and save it
     try {
         $mid = [System.Guid]::NewGuid().ToString("N")
         $identity = @{ machine_id = $mid; platform = "windows"; installed_date = (Get-Date -Format "yyyy-MM-dd"); tool = "launcher-ps1" }
@@ -51,7 +51,7 @@ function Get-Text([string]$Uri) {
 }
 
 function Download-File([string]$Primary, [string]$Fallback, [string]$OutFile) {
-    # Download to a temp file first, then move atomically — prevents corrupt partial writes
+    # Download to a temp file first, then move atomically  -  prevents corrupt partial writes
     # if the network drops mid-download (which would leave $OutFile half-written and unparseable).
     $tmp = $OutFile + ".tmp"
     try {
@@ -408,7 +408,7 @@ try {
         }
     }
 
-    # ripgrep (rg) is required by the fallback_rg MCP tool — install if missing
+    # ripgrep (rg) is required by the fallback_rg MCP tool  -  install if missing
     try {
         if (-not (Get-Command rg -ErrorAction SilentlyContinue)) {
             Write-Host "[$Tool] Installing ripgrep (required for code search)..."
@@ -428,7 +428,7 @@ try {
                 }
             } catch {}
             if (-not $rgInstalled -and -not (Get-Command rg -ErrorAction SilentlyContinue)) {
-                Write-Host "[$Tool] WARNING: ripgrep (rg) not found — fallback_rg search may fail. Install: https://github.com/BurntSushi/ripgrep"
+                Write-Host "[$Tool] WARNING: ripgrep (rg) not found  -  fallback_rg search may fail. Install: https://github.com/BurntSushi/ripgrep"
             }
         }
     } catch {

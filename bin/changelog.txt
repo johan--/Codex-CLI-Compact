@@ -1,3 +1,6 @@
+3.9.45
+- Fixed: removed all UTF-8 em dashes and BOM from PS1 files — PS5.1 Windows-1252 misread 0x94 as a right double-quote causing parser to report missing closing braces (root cause of all PS1 parse errors since 3.9.37)
+
 3.9.44
 - Fixed: all self-update downloads now use R2 as primary source (GitHub CDN as fallback) — prevents stale cached PS1 being written after update
 - Fixed: graperoot.cmd rewritten with atomic R2-first bootstrap (same pattern as dgc.cmd/dg.cmd)
