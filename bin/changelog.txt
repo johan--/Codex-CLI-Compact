@@ -1,3 +1,6 @@
+3.9.43
+- Fixed: cmd self-heal now works on PS5.1 Windows-1252 systems — R2 (trusted) uses plain size check, GitHub fallback uses ScriptBlock::Create with -Encoding UTF8; em dash bytes in PS1 comments were causing ScriptBlock::Create to reject the clean R2 file
+
 3.9.42
 - Fixed: dgc.cmd and dg.cmd now self-heal corrupted .ps1 files automatically on every run — atomic download, size check, and PS1 parse validation (ScriptBlock::Create) before replacing; R2-first so GitHub CDN cache can never serve a broken launcher again
 
