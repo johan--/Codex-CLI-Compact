@@ -22,7 +22,7 @@ function Get-MachineId {
             # Existing users: just stamp installed_date, keep their ID intact
             if ($identity.machine_id) {
                 $identity | Add-Member -NotePropertyName installed_date -NotePropertyValue (Get-Date -Format "yyyy-MM-dd") -Force
-                $identity | ConvertTo-Json -Compress | Set-Content -Path $identityPath -Encoding UTF8
+                [System.IO.File]::WriteAllText($identityPath, ($identity | ConvertTo-Json -Compress))
                 return "$($identity.machine_id)"
             }
         }
@@ -32,7 +32,7 @@ function Get-MachineId {
         $mid = [System.Guid]::NewGuid().ToString("N")
         $identity = @{ machine_id = $mid; platform = "windows"; installed_date = (Get-Date -Format "yyyy-MM-dd"); tool = "launcher-ps1" }
         New-Item -ItemType Directory -Force -Path $DG | Out-Null
-        $identity | ConvertTo-Json -Compress | Set-Content -Path $identityPath -Encoding UTF8
+        [System.IO.File]::WriteAllText($identityPath, ($identity | ConvertTo-Json -Compress))
         return $mid
     } catch {}
     return "unknown"

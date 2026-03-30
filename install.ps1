@@ -394,7 +394,7 @@ try {
             installed_date = (Get-Date -Format "yyyy-MM-dd")
             tool           = "install-ps1"
         }
-        $identity | ConvertTo-Json -Compress | Set-Content -Path "$INSTALL_DIR\identity.json" -Encoding UTF8
+        [System.IO.File]::WriteAllText("$INSTALL_DIR\identity.json", ($identity | ConvertTo-Json -Compress))
     } catch { }  # never block install
 
     # ── Download core engine ──────────────────────────────────────────────────────

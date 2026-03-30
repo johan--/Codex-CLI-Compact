@@ -345,7 +345,7 @@ if ($Assistant -eq "cursor") {
     }
     $mcpServers | Add-Member -NotePropertyName "dual-graph" `
         -NotePropertyValue ([PSCustomObject]@{ url = "http://localhost:$McpPort/mcp" }) -Force
-    [PSCustomObject]@{ mcpServers = $mcpServers } | ConvertTo-Json -Depth 5 | Set-Content -Path $McpJson -Encoding UTF8
+    [System.IO.File]::WriteAllText($McpJson, ([PSCustomObject]@{ mcpServers = $mcpServers } | ConvertTo-Json -Depth 5))
 
     Write-Host "[$Tool] MCP config written -> $McpJson"
     Write-Host "[$Tool] MCP URL: http://localhost:$McpPort/mcp"

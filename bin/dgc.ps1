@@ -38,7 +38,7 @@ function Get-MachineId {
             # Existing users: just stamp installed_date, keep their ID intact
             if ($identity.machine_id) {
                 $identity | Add-Member -NotePropertyName installed_date -NotePropertyValue (Get-Date -Format "yyyy-MM-dd") -Force
-                $identity | ConvertTo-Json -Compress | Set-Content -Path $identityPath -Encoding UTF8
+                [System.IO.File]::WriteAllText($identityPath, ($identity | ConvertTo-Json -Compress))
                 return "$($identity.machine_id)"
             }
         }
@@ -48,7 +48,7 @@ function Get-MachineId {
         $mid = [System.Guid]::NewGuid().ToString("N")
         $identity = @{ machine_id = $mid; platform = "windows"; installed_date = (Get-Date -Format "yyyy-MM-dd"); tool = "launcher-ps1" }
         New-Item -ItemType Directory -Force -Path $DG | Out-Null
-        $identity | ConvertTo-Json -Compress | Set-Content -Path $identityPath -Encoding UTF8
+        [System.IO.File]::WriteAllText($identityPath, ($identity | ConvertTo-Json -Compress))
         return $mid
     } catch {}
     return "unknown"
@@ -725,7 +725,7 @@ Keep ``CONTEXT.md`` under 20 lines total. Do NOT summarize the full conversation
 
     if (-not (Test-Path $DataDir)) { New-Item -ItemType Directory -Force -Path $DataDir | Out-Null }
     $contextStore = Join-Path $DataDir "context-store.json"
-    if (-not (Test-Path $contextStore)) { Set-Content -Path $contextStore -Value "[]" -Encoding UTF8 }
+    if (-not (Test-Path $contextStore)) { [System.IO.File]::WriteAllText($contextStore, "[]") }
 
     $scanErr = Join-Path $DataDir "scan_error.log"
     if (Test-Path $scanErr) { Remove-Item $scanErr -Force -ErrorAction SilentlyContinue }
@@ -934,7 +934,7 @@ Keep ``CONTEXT.md`` under 20 lines total. Do NOT summarize the full conversation
                 })
                 if ($cleaned.Count -ne @($gs.hooks.Stop).Count) {
                     $gs.hooks.Stop = $cleaned
-                    $gs | ConvertTo-Json -Depth 8 | Set-Content -Path $globalSettings -Encoding UTF8
+                    [System.IO.File]::WriteAllText($globalSettings, ($gs | ConvertTo-Json -Depth 8))
                     Write-Host "[$Tool] Removed stale /bin/bash stop hook from global settings"
                     # Also delete the old .sh file
                     $oldSh = Join-Path $env:USERPROFILE ".claude\token-counter-stop.sh"
@@ -1031,7 +1031,7 @@ if ($transcript -and (Test-Path $transcript)) {
             Stop         = @(@{ matcher = ""; hooks = @(@{ type = "command"; command = $stopCmd }) })
         }
     }
-    $hooks | ConvertTo-Json -Depth 8 | Set-Content -Path $settingsFile -Encoding UTF8
+    [System.IO.File]::WriteAllText($settingsFile, ($hooks | ConvertTo-Json -Depth 8))
     Write-Host "[$Tool] Context hooks ready (SessionStart + PreCompact + Stop)"
 
     Write-Host ""
