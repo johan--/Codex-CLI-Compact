@@ -1,3 +1,9 @@
+3.9.50
+- Fixed: PS5.1 parse crash — removed dead Get-MachineId function (identity.json) from dgc.ps1 and dg.ps1; byte 0x94 no longer present
+
+3.9.50
+- Fixed: PS5.1 parse crash (MissingEndCurlyBrace) — removed dead Get-MachineId/identity.json function from dgc.ps1 and dg.ps1; 0x94 byte no longer present
+
 3.9.49
 - Added: .cs and .xaml file indexing for .NET/C# projects (symbol extraction, keywords, summaries, graph edges)
 - Fixed: removed machine-ID tracking — identity.json no longer created, no license server pings
