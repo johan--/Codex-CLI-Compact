@@ -54,7 +54,7 @@ try {
         if (-not (Test-Path $Path)) { return $true }
         for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
             try {
-                # Use cmd rmdir first — PowerShell Remove-Item -Recurse has
+                # Use cmd rmdir first  -  PowerShell Remove-Item -Recurse has
                 # long-standing bugs with venv directories on Windows.
                 if (Test-Path $Path -PathType Container) {
                     cmd /c "rmdir /s /q `"$Path`"" 2>$null
@@ -93,7 +93,7 @@ try {
         $venvCfg = Join-Path $venvDir "pyvenv.cfg"
 
         # Step 1: Kill all processes holding venv files open.
-        # First try targeted kill via WMI CommandLine — works for normal processes.
+        # First try targeted kill via WMI CommandLine  -  works for normal processes.
         # WMI CommandLine is empty for protected/system processes (e.g. Claude Code's MCP
         # server), so the targeted kill is silently a no-op in that case.
         try {
@@ -107,13 +107,13 @@ try {
                 ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }
             Start-Sleep -Milliseconds 500
         } catch {}
-        # Also use taskkill — it works across terminal sessions where Stop-Process gets Access Denied
+        # Also use taskkill  -  it works across terminal sessions where Stop-Process gets Access Denied
         try { & taskkill /F /IM "mcp-graph-server.exe" /T 2>$null } catch {}
         try { & taskkill /F /IM "graph-builder.exe" /T 2>$null } catch {}
 
         # Fallback: if a venv .pyd is still locked after targeted kills, the locking process
         # returned empty WMI CommandLine (protected process, e.g. Claude Code MCP server).
-        # Probe the file directly — if locked, kill ALL python.exe as a last resort.
+        # Probe the file directly  -  if locked, kill ALL python.exe as a last resort.
         $probePyd = Get-ChildItem (Join-Path $venvDir "Lib\site-packages\graperoot") -Filter "*.pyd" -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($probePyd) {
             $locked = $false
@@ -124,7 +124,7 @@ try {
                 $locked = $true
             } catch {}
             if ($locked) {
-                Write-Host "[install] Venv DLL is still locked — stopping all Python processes..."
+                Write-Host "[install] Venv DLL is still locked  -  stopping all Python processes..."
                 try { & taskkill /F /IM "python.exe" /T 2>$null } catch {}
                 try { & taskkill /F /IM "pythonw.exe" /T 2>$null } catch {}
                 Start-Sleep -Milliseconds 1000
@@ -136,26 +136,26 @@ try {
         # The leftover .pth makes every Python startup print a ModuleNotFoundError to
         # stderr, which becomes a terminating exception under EAP=Stop.
         # Fix: delete the .pth; if Windows ACLs block deletion, overwrite with empty
-        # content — write permission is granted even when delete isn't.
+        # content  -  write permission is granted even when delete isn't.
         $sitePkgs = Join-Path $venvDir "Lib\site-packages"
         $pywin32Pth = Join-Path $sitePkgs "pywin32.pth"
         if (Test-Path $pywin32Pth) {
             Write-Host "[install] Neutralising orphaned pywin32 (left by previous install)..."
             # 1. Try deletion first
             try { Remove-Item $pywin32Pth -Force -ErrorAction Stop } catch {
-                # Deletion failed — overwrite with empty content so site.py ignores it
+                # Deletion failed  -  overwrite with empty content so site.py ignores it
                 try { [System.IO.File]::WriteAllText($pywin32Pth, "") } catch {}
             }
-            # 2. Best-effort cleanup of DLL folder (may be locked — non-fatal)
+            # 2. Best-effort cleanup of DLL folder (may be locked  -  non-fatal)
             $pw32sys = Join-Path $sitePkgs "pywin32_system32"
             if (Test-Path $pw32sys) {
                 try { Remove-Item $pw32sys -Recurse -Force -ErrorAction SilentlyContinue } catch {}
             }
-            # 3. pip uninstall for registry cleanup — don't depend on exit code
+            # 3. pip uninstall for registry cleanup  -  don't depend on exit code
             Invoke-Native { & $venvPython -m pip uninstall pywin32 pywin32-ctypes -y } | Out-Null
         }
 
-        # Step 3: Probe the existing venv — reuse only if structurally complete and pip works.
+        # Step 3: Probe the existing venv  -  reuse only if structurally complete and pip works.
         if ((Test-Path $venvPython) -and (Test-Path $venvCfg)) {
             Invoke-Native { & $venvPython -m pip --version } | Out-Null
             if ($LASTEXITCODE -eq 0) {
@@ -163,8 +163,8 @@ try {
                 return
             }
 
-            # pip is missing — venv is in bad shape; fall through to recreate it fresh
-            Write-Host "[install] Existing venv is missing pip — recreating it..."
+            # pip is missing  -  venv is in bad shape; fall through to recreate it fresh
+            Write-Host "[install] Existing venv is missing pip  -  recreating it..."
         }
 
         # Remove any existing (broken or partial) venv before creating fresh.
@@ -176,7 +176,7 @@ try {
                 Rename-Item $venvDir $tombstone -Force -ErrorAction Stop
                 Remove-PathWithRetry $tombstone | Out-Null
             } catch {
-                # Rename failed — try direct removal
+                # Rename failed  -  try direct removal
                 if (-not (Remove-PathWithRetry $venvDir)) {
                     Write-Host "[install] Cannot remove locked venv. Attempting to create over it with --clear..."
                 }
@@ -214,7 +214,7 @@ try {
     }
 
     # ══════════════════════════════════════════════════════════════════════════════
-    # PREREQUISITE CHECK — detect missing tools, ask user, install or stop
+    # PREREQUISITE CHECK  -  detect missing tools, ask user, install or stop
     # ══════════════════════════════════════════════════════════════════════════════
     $step = "Checking prerequisites"
     Write-Host ""
@@ -226,7 +226,7 @@ try {
     $hasWinget = [bool](Get-Command winget -ErrorAction SilentlyContinue)
     $needsRestart = $false
 
-    # ── Check Python ──────────────────────────────────────────────────────────────
+    # -- Check Python --------------------------------------------------------------
     # Helper: returns $true if a python exe is the Windows Store stub (not real Python)
     function Test-WindowsStoreStub([string]$exe) {
         try {
@@ -286,7 +286,7 @@ try {
         }
     }
 
-    # ── Check Node.js ─────────────────────────────────────────────────────────────
+    # -- Check Node.js -------------------------------------------------------------
     $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
     if ($nodeCmd) {
         $nodeVer = & node --version 2>&1
@@ -320,7 +320,7 @@ try {
         }
     }
 
-    # ── If we just installed Python or Node, user must restart terminal ───────────
+    # -- If we just installed Python or Node, user must restart terminal -----------
     if ($needsRestart) {
         Write-Host ""
         Write-Host "========================================" -ForegroundColor Cyan
@@ -333,7 +333,7 @@ try {
         exit 0
     }
 
-    # ── Check Claude Code ─────────────────────────────────────────────────────────
+    # -- Check Claude Code ---------------------------------------------------------
     $claudeCmd = Get-Command claude -ErrorAction SilentlyContinue
     if ($claudeCmd) {
         Write-Host "[check] Claude Code found." -ForegroundColor Green
@@ -366,38 +366,13 @@ try {
     Write-Host ""
 
     # ══════════════════════════════════════════════════════════════════════════════
-    # MAIN INSTALL — same as before
+    # MAIN INSTALL  -  same as before
     # ══════════════════════════════════════════════════════════════════════════════
 
     $step = "Initializing install directory"
     New-Item -ItemType Directory -Force -Path $INSTALL_DIR | Out-Null
 
-    # ── Identity setup ────────────────────────────────────────────────────────────
-    $step = "Writing identity"
-    $machineId = $null
-    try {
-        $existingIdPath = Join-Path $env:USERPROFILE ".dual-graph\identity.json"
-        if (Test-Path $existingIdPath) {
-            $existingIdentity = Get-Content $existingIdPath -Raw | ConvertFrom-Json
-            if ($existingIdentity.machine_id -and $existingIdentity.installed_date) {
-                $machineId = "$($existingIdentity.machine_id)"
-            }
-        }
-    } catch {}
-    if (-not $machineId) { $machineId = [System.Guid]::NewGuid().ToString("N") }
-
-    # Save identity so MCP server can ping on each startup (tracks real usage)
-    try {
-        $identity = @{
-            machine_id     = $machineId
-            platform       = "windows"
-            installed_date = (Get-Date -Format "yyyy-MM-dd")
-            tool           = "install-ps1"
-        }
-        [System.IO.File]::WriteAllText("$INSTALL_DIR\identity.json", ($identity | ConvertTo-Json -Compress))
-    } catch { }  # never block install
-
-    # ── Download core engine ──────────────────────────────────────────────────────
+    # -- Download core engine ------------------------------------------------------
     $step = "Downloading core engine"
     Write-Host "[install] Downloading core engine..."
     $launchDest = "$INSTALL_DIR\dual_graph_launch.sh"
@@ -439,7 +414,7 @@ try {
         try { Invoke-WebRequestWithRetry -Uri "$R2/version.txt" -OutFile "$INSTALL_DIR\version.txt" -Label "Download version.txt fallback" } catch {}
     }
 
-    # ── Re-locate Python (may have been installed earlier in this session) ────────
+    # -- Re-locate Python (may have been installed earlier in this session) --------
     $step = "Locating Python"
     if (-not $pythonExe) {
         foreach ($candidate in @("python3.11", "python3", "python")) {
@@ -454,7 +429,7 @@ try {
     $verStr = & $pythonExe --version 2>&1
     Write-Host "[install] Using $pythonExe ($verStr)"
 
-    # ── Create venv ───────────────────────────────────────────────────────────────
+    # -- Create venv ---------------------------------------------------------------
     $step = "Creating Python venv"
     Ensure-Venv -PythonExe $pythonExe -InstallDir $INSTALL_DIR
 
@@ -466,7 +441,7 @@ try {
     $constraintsFile = Join-Path $INSTALL_DIR "pip-constraints.txt"
     "pywin32<0`npywin32-ctypes<0" | Set-Content $constraintsFile -Encoding UTF8
 
-    # Use Invoke-Native for ALL pip calls — Python prints pywin32.pth errors to stderr
+    # Use Invoke-Native for ALL pip calls  -  Python prints pywin32.pth errors to stderr
     # on startup even after we delete the .pth, and EAP=Stop turns that into a crash.
     Invoke-Native { & $venvPy -m pip install --upgrade pip --quiet } | Out-Null
     Invoke-Native { & $venvPy -m pip install "mcp>=1.3.0" uvicorn anyio starlette --quiet --constraint $constraintsFile } | Out-Null
@@ -485,7 +460,7 @@ try {
         }
     }
 
-    # ── Add to user PATH ──────────────────────────────────────────────────────────
+    # -- Add to user PATH ----------------------------------------------------------
     $step = "Adding to PATH"
     $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
     if ($userPath -notlike "*\.dual-graph*") {
