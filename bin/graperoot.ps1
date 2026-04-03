@@ -60,20 +60,39 @@ $Tool        = "graperoot"
 $Assistant   = "claude"   # default
 $ProjectPath = ""
 $Passthrough = @()
+$_validTools = @("claude","codex","cursor","gemini","opencode","copilot")
+$_toolSet    = $false
 
 foreach ($arg in @($Arg0, $Arg1, $Arg2)) {
-    if ($arg -in @("--claude","claude"))     { $Assistant = "claude";   continue }
-    if ($arg -in @("--codex","codex"))       { $Assistant = "codex";    continue }
-    if ($arg -in @("--cursor","cursor"))     { $Assistant = "cursor";   continue }
-    if ($arg -in @("--gemini","gemini"))     { $Assistant = "gemini";   continue }
-    if ($arg -in @("--opencode","opencode")) { $Assistant = "opencode"; continue }
-    if ($arg -in @("--copilot","copilot"))   { $Assistant = "copilot";  continue }
+    if ($arg -in @("--claude","claude"))     { $Assistant = "claude";   $_toolSet = $true; continue }
+    if ($arg -in @("--codex","codex"))       { $Assistant = "codex";    $_toolSet = $true; continue }
+    if ($arg -in @("--cursor","cursor"))     { $Assistant = "cursor";   $_toolSet = $true; continue }
+    if ($arg -in @("--gemini","gemini"))     { $Assistant = "gemini";   $_toolSet = $true; continue }
+    if ($arg -in @("--opencode","opencode")) { $Assistant = "opencode"; $_toolSet = $true; continue }
+    if ($arg -in @("--copilot","copilot"))   { $Assistant = "copilot";  $_toolSet = $true; continue }
     if ($arg -and $arg -ne ".") {
         if ($arg.StartsWith("--")) { $Passthrough += $arg }
         elseif (-not $ProjectPath) { $ProjectPath = $arg }
         else { $Passthrough += $arg }
     }
 }
+
+# Catch typos like --claud, --gemi  - check if any passthrough arg looks like a misspelled tool
+if (-not $_toolSet) {
+    foreach ($pt in $Passthrough) {
+        if ($pt.StartsWith("--")) {
+            $bare = $pt.TrimStart("-")
+            foreach ($t in $_validTools) {
+                if ($t.StartsWith($bare) -or $bare.StartsWith($t)) {
+                    Write-Host "[$Tool] Unknown tool '$pt'. Did you mean '--$t'?" -ForegroundColor Red
+                    Write-Host "[$Tool] Valid tools: $($_validTools -join ', ')"
+                    exit 2
+                }
+            }
+        }
+    }
+}
+
 if (-not $ProjectPath) { $ProjectPath = (Get-Location).Path }
 $ProjectPath = (Resolve-Path $ProjectPath).Path
 

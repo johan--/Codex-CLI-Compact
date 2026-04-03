@@ -1,25 +1,89 @@
 # dgc - Claude Code + dual-graph MCP launcher (PowerShell)
-param(
-    [Parameter(Position = 0)]
-    [string]$Arg0 = ".",
-    [Parameter(Position = 1)]
-    [string]$Arg1 = "",
-    [Parameter(Position = 2)]
-    [string]$Arg2 = "",
-    [string]$Resume = ""
-)
+# No param() block  - we parse $args manually to pass unknown flags through to claude.
 
 $ErrorActionPreference = "Stop"
 
-# Resolve $ProjectPath and $Resume from positional args.
-# Supports both PowerShell convention (-Resume <id>) and Unix convention (--resume <id>).
-if ($Arg0 -eq "--resume") {
-    $ProjectPath = (Get-Location).Path
-    if (-not $Resume) { $Resume = $Arg1 }
-} else {
-    $ProjectPath = $Arg0
-    if ($Arg1 -eq "--resume" -and -not $Resume) { $Resume = $Arg2 }
+# Claude CLI flags  - three categories:
+# 1. Single-value: always consume exactly the next argument
+$_singleFlags = @('--agent','--agents','--append-system-prompt','--debug-file','--effort',
+    '--fallback-model','--input-format','--json-schema','--max-budget-usd','--model',
+    '--output-format','--permission-mode','--session-id','--setting-sources','--settings',
+    '--system-prompt')
+# 2. Optional-value: peek  - consume next arg only if it doesn't start with -
+$_optionalFlags = @('--debug','--from-pr','--resume','--worktree')
+# 3. Variadic: consume all following non-flag args (e.g. --allowedTools Bash Edit Read)
+$_variadicFlags = @('--add-dir','--allowedTools','--allowed-tools','--betas',
+    '--disallowedTools','--disallowed-tools','--file','--mcp-config','--plugin-dir','--tools')
+
+$ProjectPath = ""
+$_projectSet = $false
+$Prompt = ""
+$Resume = ""
+$ClaudeExtraArgs = @()
+
+$i = 0
+while ($i -lt $args.Count) {
+    $a = [string]$args[$i]
+    if ($a -eq '--') {
+        if ($i+1 -lt $args.Count) { $ClaudeExtraArgs += $args[($i+1)..($args.Count-1)] }
+        break
+    }
+    elseif ($a -eq '-Resume') {
+        # PowerShell-native convention: -Resume <id>
+        $a = '--resume'
+        # fall through to --flag handling below
+    }
+    if ($a -match '^--[^=]+=') {
+        # --flag=value form (e.g. --tmux=classic)  - pass as-is
+        $ClaudeExtraArgs += $a
+        $i++; continue
+    }
+    elseif ($_singleFlags -contains $a) {
+        $ClaudeExtraArgs += $a, [string]$args[$i+1]
+        $i += 2; continue
+    }
+    elseif ($_optionalFlags -contains $a) {
+        $ClaudeExtraArgs += $a
+        $i++
+        if ($i -lt $args.Count) {
+            $peek = [string]$args[$i]
+            if ($peek -and -not $peek.StartsWith('-')) {
+                if ($a -eq '--resume') { $Resume = $peek }
+                $ClaudeExtraArgs += $peek
+                $i++
+            }
+        }
+        continue
+    }
+    elseif ($_variadicFlags -contains $a) {
+        $ClaudeExtraArgs += $a
+        $i++
+        while ($i -lt $args.Count) {
+            $peek = [string]$args[$i]
+            if ($peek.StartsWith('-')) { break }
+            $ClaudeExtraArgs += $peek
+            $i++
+        }
+        continue
+    }
+    elseif ($a.StartsWith('--') -or $a.StartsWith('-')) {
+        # Unknown or boolean flag (--verbose, --brief, -p, -c, etc.)
+        $ClaudeExtraArgs += $a
+        $i++; continue
+    }
+    else {
+        # Positional: first directory = project path, first non-dir = prompt
+        if (-not $_projectSet -and (Test-Path $a -PathType Container -ErrorAction SilentlyContinue)) {
+            $ProjectPath = $a; $_projectSet = $true
+        } elseif (-not $Prompt) {
+            $Prompt = $a
+        } else {
+            $ClaudeExtraArgs += $a
+        }
+        $i++; continue
+    }
 }
+if (-not $_projectSet) { $ProjectPath = (Get-Location).Path }
 
 $DG = Join-Path $env:USERPROFILE ".dual-graph"
 $Tool = "dgc"
@@ -359,7 +423,12 @@ try {
                 } catch {}
                 Write-Host "[$Tool] Updated to $remoteVer. Restarting..."
                 $updatedScript = Join-Path $DG "dgc.ps1"
-                if (Test-Path $updatedScript) { if ($Resume) { & $updatedScript $ProjectPath -Resume $Resume } else { & $updatedScript $ProjectPath }; exit $LASTEXITCODE }
+                if (Test-Path $updatedScript) {
+                    $reArgs = @($ProjectPath)
+                    if ($Prompt) { $reArgs += $Prompt }
+                    $reArgs += $ClaudeExtraArgs
+                    & $updatedScript @reArgs; exit $LASTEXITCODE
+                }
             }
         } catch {}
     }
@@ -1021,7 +1090,10 @@ if ($transcript -and (Test-Path $transcript)) {
     $hasNativePref = Test-Path variable:PSNativeCommandUseErrorActionPreference
     if ($hasNativePref) { $prevNativePref = $PSNativeCommandUseErrorActionPreference; $global:PSNativeCommandUseErrorActionPreference = $false }
     try {
-        if ($Resume) { & claude --resume $Resume } else { & claude }
+        $launchArgs = @()
+        if ($Prompt) { $launchArgs += $Prompt }
+        $launchArgs += $ClaudeExtraArgs
+        & claude @launchArgs
         $claudeExit = $LASTEXITCODE
         # Show resume hint  -  filter by project to avoid showing wrong session
         try {

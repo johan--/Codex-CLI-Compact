@@ -1,3 +1,6 @@
+3.9.53
+- Fixed: PS5.1 parse crash on R2-served scripts - replaced all remaining UTF-8 em-dashes with ASCII (byte 0x94 in Windows-1252 is interpreted as a string delimiter, breaking brace matching)
+
 3.9.52
 - Fixed: graperoot --gemini/--opencode/--copilot PS5.1 BOM crash - write JSON via temp file instead of pipe to avoid PS5.1 encoding corruption
 
