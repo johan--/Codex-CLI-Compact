@@ -6,7 +6,7 @@ Works on **macOS, Linux, and Windows**. Supports any project size.
 
 Supports **TypeScript, JavaScript, Python, Go, Swift, Rust, Java, Kotlin, C#, Ruby, and PHP**.
 
-**Join the community: [discord.gg/ptyr7KJz](https://discord.gg/ptyr7KJz)**
+**Join the community: [discord.gg/ptyr7KJz](https://discord.com/invite/YwKdQATY2d)**
 
 ---
 
@@ -222,7 +222,7 @@ The launcher scripts (`bin/`) are open source under Apache 2.0. PRs are welcome 
 
 Have a question, found a bug, or want to share feedback?
 
-**Join the Discord: [discord.gg/ptyr7KJz](https://discord.gg/ptyr7KJz)**
+**Join the Discord: [discord.gg/ptyr7KJz](https://discord.com/invite/YwKdQATY2d)**
 
 - Get help with setup
 - Report bugs
@@ -235,7 +235,7 @@ Have a question, found a bug, or want to share feedback?
 
 A huge thank you to everyone who used early versions of Dual-Graph and shared feedback through the telemetry program — your usage data helped us squash bugs and stabilize the tool into what it is today. We've now removed all telemetry in favor of full transparency.
 
-Want to keep helping shape the project? **[Join the Discord](https://discord.gg/ptyr7KJz)**
+Want to keep helping shape the project? **[Join the Discord](https://discord.com/invite/YwKdQATY2d)**
 
 ---
 
