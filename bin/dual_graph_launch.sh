@@ -1923,7 +1923,11 @@ else
   _LAUNCH_ARGS=()
   [[ -n "$PROMPT" ]] && _LAUNCH_ARGS+=("$PROMPT")
   [[ ${#CLAUDE_EXTRA_ARGS[@]} -gt 0 ]] && _LAUNCH_ARGS+=("${CLAUDE_EXTRA_ARGS[@]}")
-  "$ASSISTANT" "${_LAUNCH_ARGS[@]}" 2>"$DATA_DIR/assistant_stderr.log"
+  if [[ ${#_LAUNCH_ARGS[@]} -gt 0 ]]; then
+    "$ASSISTANT" "${_LAUNCH_ARGS[@]}" 2>"$DATA_DIR/assistant_stderr.log"
+  else
+    "$ASSISTANT" 2>"$DATA_DIR/assistant_stderr.log"
+  fi
 fi
 ASSISTANT_EXIT=$?
 set -e

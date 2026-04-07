@@ -1,3 +1,6 @@
+3.9.56
+- Fixed: "unbound variable _LAUNCH_ARGS" crash when launching assistant without prompt or extra flags (set -u + empty array in bash < 4.4)
+
 3.9.55
 - Fixed: "unbound variable CLAUDE_EXTRA_ARGS" crash when launching without extra flags
 
