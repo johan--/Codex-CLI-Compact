@@ -25,26 +25,83 @@ else
 fi
 RESUME_ID=""
 PROMPT=""
-_ARG1="${1:-}"
-_ARG2="${2:-}"
-_ARG3="${3:-}"
-if [[ "$_ARG1" == "--resume" ]]; then
-  PROJECT="$(pwd)"
-  RESUME_ID="$_ARG2"
-elif [[ -n "$_ARG1" ]] && [[ "$_ARG1" != --* ]]; then
-  PROJECT="$_ARG1"
-  if [[ "$_ARG2" == "--resume" ]]; then
-    RESUME_ID="$_ARG3"
-  else
-    PROMPT="$_ARG2"
-  fi
-else
-  PROJECT="$(pwd)"
-  PROMPT="$_ARG1"
-fi
+CLAUDE_EXTRA_ARGS=()
+_PROJECT_SET=false
+
+# Claude CLI flags — three categories:
+# 1. Single-value: always consume exactly the next argument
+_SINGLE_FLAGS=(--agent --agents --append-system-prompt --debug-file --effort
+  --fallback-model --input-format --json-schema --max-budget-usd --model
+  --output-format --permission-mode --session-id --setting-sources --settings
+  --system-prompt)
+# 2. Optional-value: peek — consume next arg only if it doesn't start with -
+_OPTIONAL_FLAGS=(--debug --from-pr --resume --worktree)
+# 3. Variadic: consume all following non-flag args (e.g. --allowedTools Bash Edit Read)
+_VARIADIC_FLAGS=(--add-dir --allowedTools --allowed-tools --betas
+  --disallowedTools --disallowed-tools --file --mcp-config --plugin-dir --tools)
+
+_in_list() { local needle="$1"; shift; for v in "$@"; do [[ "$v" == "$needle" ]] && return 0; done; return 1; }
+
+while (( $# > 0 )); do
+  case "$1" in
+    --)
+      shift
+      CLAUDE_EXTRA_ARGS+=("$@")
+      break
+      ;;
+    --*=*)
+      # --flag=value form (e.g. --tmux=classic, --model=opus-4) — pass as-is
+      CLAUDE_EXTRA_ARGS+=("$1")
+      shift
+      ;;
+    --*)
+      if _in_list "$1" "${_SINGLE_FLAGS[@]}"; then
+        CLAUDE_EXTRA_ARGS+=("$1" "$2")
+        shift 2
+      elif _in_list "$1" "${_OPTIONAL_FLAGS[@]}"; then
+        _flag="$1"; shift
+        CLAUDE_EXTRA_ARGS+=("$_flag")
+        if [[ -n "${1:-}" && "$1" != -* ]]; then
+          [[ "$_flag" == "--resume" ]] && RESUME_ID="$1"
+          CLAUDE_EXTRA_ARGS+=("$1")
+          shift
+        fi
+      elif _in_list "$1" "${_VARIADIC_FLAGS[@]}"; then
+        CLAUDE_EXTRA_ARGS+=("$1"); shift
+        while [[ -n "${1:-}" && "$1" != -* ]]; do
+          CLAUDE_EXTRA_ARGS+=("$1"); shift
+        done
+      else
+        # Unknown or boolean flag (--verbose, --brief, --chrome, etc.) — pass through
+        CLAUDE_EXTRA_ARGS+=("$1")
+        shift
+      fi
+      ;;
+    -*)
+      # Short flags (-p, -d, -v, -w, -c, -r, -h, etc.) — pass through
+      CLAUDE_EXTRA_ARGS+=("$1")
+      shift
+      ;;
+    *)
+      # Positional: first directory = project path, first non-dir = prompt
+      if ! $_PROJECT_SET && [[ -d "$1" ]]; then
+        PROJECT="$1"
+        _PROJECT_SET=true
+      elif [[ -z "$PROMPT" ]]; then
+        PROMPT="$1"
+      else
+        CLAUDE_EXTRA_ARGS+=("$1")
+      fi
+      shift
+      ;;
+  esac
+done
+$_PROJECT_SET || PROJECT="$(pwd)"
 PROJECT="$(cd "$PROJECT" && pwd)"
 DATA_DIR="$PROJECT/.dual-graph"
 CURRENT_STEP="Initializing launcher"
+TELEMETRY_WEBHOOK="https://script.google.com/macros/s/AKfycbyq_5igbBUORhSqMNktAoX2GQg8BadKcYZOTV-XRUr3vbY3QuK7jjS8EWLg_pZyMDuD/exec"
+FEEDBACK_WEBHOOK="https://script.google.com/macros/s/AKfycbyq_5igbBUORhSqMNktAoX2GQg8BadKcYZOTV-XRUr3vbY3QuK7jjS8EWLg_pZyMDuD/exec"
 
 case "$ASSISTANT" in
   codex)  TOOL_LABEL="dg" ;;
@@ -132,11 +189,77 @@ except Exception:
 PY
 }
 
-_send_cli_error() {
-  : # error telemetry removed
+_get_telemetry_consent() {
+  python3 -c "
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+if p.exists():
+    d = json.loads(p.read_text(encoding='utf-8'))
+    print(d.get('telemetry', ''))
+else:
+    print('')
+" "$SCRIPT_DIR/identity.json" 2>/dev/null || echo ""
 }
 
-trap '' ERR
+_set_telemetry_consent() {
+  local value="$1"
+  python3 - "$SCRIPT_DIR/identity.json" "$value" <<'PY' 2>/dev/null || true
+import json, sys, os
+from pathlib import Path
+p = Path(sys.argv[1])
+val = sys.argv[2]
+data = {}
+if p.exists():
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+data["telemetry"] = val
+p.parent.mkdir(parents=True, exist_ok=True)
+p.write_text(json.dumps(data), encoding="utf-8")
+PY
+}
+
+_request_telemetry_consent() {
+  local consent
+  consent="$(_get_telemetry_consent)"
+  if [[ "$consent" == "enabled" || "$consent" == "disabled" ]]; then
+    return
+  fi
+  # Only prompt if stdin is a terminal
+  if [[ ! -t 0 ]]; then
+    _set_telemetry_consent "disabled"
+    return
+  fi
+  echo ""
+  echo "[$TOOL_LABEL] Help improve graperoot by sharing anonymous error reports?"
+  echo "[$TOOL_LABEL] This sends only error type and step (no code, paths, or personal data)."
+  local answer=""
+  read -r -t 15 -p "[$TOOL_LABEL] Enable telemetry? (y/n): " answer 2>/dev/null || answer=""
+  if [[ "$answer" =~ ^[Yy] ]]; then
+    _set_telemetry_consent "enabled"
+    echo "[$TOOL_LABEL] Telemetry enabled. Thank you!"
+  else
+    _set_telemetry_consent "disabled"
+    echo "[$TOOL_LABEL] Telemetry disabled. No data will be sent."
+  fi
+  echo ""
+}
+
+_send_cli_error() {
+  local step="${1:-unknown}"
+  local errmsg="${2:-unknown}"
+  # Only send if user opted in
+  if [[ "$(_get_telemetry_consent)" != "enabled" ]]; then return; fi
+  # Fire-and-forget POST -- never block or fail the launcher
+  (curl -sf -X POST "$TELEMETRY_WEBHOOK" \
+    -H "Content-Type: application/json" \
+    -d "{\"type\":\"cli_error\",\"platform\":\"$(_platform_name)\",\"machine_id\":\"$(_machine_id)\",\"error_message\":\"$(echo "$errmsg" | head -c 500 | tr '"\\' '..')\",\"script_step\":\"$step\",\"tool\":\"$TOOL_LABEL\"}" \
+    --max-time 3 >/dev/null 2>&1 || true) &
+}
+
+trap '_send_cli_error "$CURRENT_STEP" "Unhandled launcher failure in dual_graph_launch.sh (exit=$?)"' ERR
 
 _version_gt() {
   local remote="$1"
@@ -278,8 +401,8 @@ for n in notes: print(n)
   fi
   echo "[$TOOL_LABEL] Updated to $_REMOTE_VER. Restarting..."
   EXEC_ARGS=("$SCRIPT_DIR/dual_graph_launch.sh" "$ASSISTANT" "$PROJECT")
-  [[ -n "$RESUME_ID" ]] && EXEC_ARGS+=("--resume" "$RESUME_ID")
   [[ -n "$PROMPT" ]] && EXEC_ARGS+=("$PROMPT")
+  EXEC_ARGS+=("${CLAUDE_EXTRA_ARGS[@]}")
   exec "${EXEC_ARGS[@]}"
 elif [[ -n "$_REMOTE_VER" && "$_REMOTE_VER" != "$_LOCAL_VER" ]]; then
   echo "[$TOOL_LABEL] Local version ($_LOCAL_VER) is newer than remote ($_REMOTE_VER); skipping downgrade."
@@ -347,6 +470,10 @@ if ! command -v rg &>/dev/null; then
     echo "[$TOOL_LABEL] WARNING: ripgrep (rg) not found — fallback_rg search may fail. Install: https://github.com/BurntSushi/ripgrep"
   fi
 fi
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ── Telemetry consent (one-time prompt) ───────────────────────────────────────
+_request_telemetry_consent
 # ──────────────────────────────────────────────────────────────────────────────
 
 # ── Python discovery & venv setup ────────────────────────────────────────────
@@ -1670,6 +1797,26 @@ if [[ ! -f "$_INSTALL_DATE_FILE" ]]; then
 fi
 
 
+# ── One-time feedback prompt ──────────────────────────────────────────────────
+_FEEDBACK_MARKER="$SCRIPT_DIR/feedback_done"
+if [[ ! -f "$_FEEDBACK_MARKER" ]] && [[ -t 0 ]] && [[ "$(_get_telemetry_consent)" == "enabled" ]]; then
+  echo ""
+  echo "[$TOOL_LABEL] Quick feedback (one-time, 10 seconds):"
+  echo "[$TOOL_LABEL] How would you rate graperoot so far? (1=poor, 5=excellent)"
+  read -r -t 15 -p "[$TOOL_LABEL] Rating (1-5): " _RATING 2>/dev/null || _RATING=""
+  if [[ "$_RATING" =~ ^[1-5]$ ]]; then
+    read -r -t 30 -p "[$TOOL_LABEL] One thing we could improve? (Enter to skip): " _SUGGESTION 2>/dev/null || _SUGGESTION=""
+    (curl -sf -X POST "$FEEDBACK_WEBHOOK" \
+      -H "Content-Type: application/json" \
+      -d "{\"type\":\"feedback\",\"platform\":\"$(_platform_name)\",\"machine_id\":\"$(_machine_id)\",\"rating\":$_RATING,\"suggestion\":\"$(echo "$_SUGGESTION" | head -c 300 | tr '"\\' '..')\",\"tool\":\"$TOOL_LABEL\"}" \
+      --max-time 5 >/dev/null 2>&1 || true) &
+    echo "[$TOOL_LABEL] Thanks for the feedback!"
+  fi
+  date +%Y-%m-%d > "$_FEEDBACK_MARKER" 2>/dev/null || true
+  echo ""
+fi
+# ──────────────────────────────────────────────────────────────────────────────
+
 # ── Pre-flight checks ────────────────────────────────────────────────────────
 CURRENT_STEP="Pre-flight checks"
 
@@ -1768,12 +1915,12 @@ elif [[ "$ASSISTANT" == "copilot" ]]; then
   echo "[$TOOL_LABEL] Press Ctrl+C to stop the MCP server when you are done."
   trap 'echo ""; echo "[$TOOL_LABEL] Shutting down MCP server (PID $MCP_PID)..."; kill "$MCP_PID" 2>/dev/null; rm -f "$DATA_DIR/mcp_server.pid" "$DATA_DIR/mcp_port"; exit 0' INT TERM HUP
   while true; do sleep 5 & wait $!; done
-elif [[ -n "$RESUME_ID" ]]; then
-  "$ASSISTANT" --resume "$RESUME_ID" 2>"$DATA_DIR/assistant_stderr.log"
-elif [[ -n "$PROMPT" ]]; then
-  "$ASSISTANT" "$PROMPT" 2>"$DATA_DIR/assistant_stderr.log"
 else
-  "$ASSISTANT" 2>"$DATA_DIR/assistant_stderr.log"
+  # Build launch args: optional prompt + all passthrough flags
+  _LAUNCH_ARGS=()
+  [[ -n "$PROMPT" ]] && _LAUNCH_ARGS+=("$PROMPT")
+  _LAUNCH_ARGS+=("${CLAUDE_EXTRA_ARGS[@]}")
+  "$ASSISTANT" "${_LAUNCH_ARGS[@]}" 2>"$DATA_DIR/assistant_stderr.log"
 fi
 ASSISTANT_EXIT=$?
 set -e

@@ -12,7 +12,83 @@ $R2 = "https://pub-18426978d5a14bf4a60ddedd7d5b6dab.r2.dev"
 $BaseUrl = "https://raw.githubusercontent.com/kunal12203/Codex-CLI-Compact/main"
 $Python = Join-Path $DG "venv\Scripts\python.exe"
 $NoticeFile = Join-Path $DG "last_update_notice.txt"
+$WebhookUrl = "https://script.google.com/macros/s/AKfycbyq_5igbBUORhSqMNktAoX2GQg8BadKcYZOTV-XRUr3vbY3QuK7jjS8EWLg_pZyMDuD/exec"
 
+function Get-MachineId {
+    $idFile = Join-Path $DG "identity.json"
+    try {
+        if (Test-Path $idFile) {
+            $data = Get-Content $idFile -Raw | ConvertFrom-Json
+            if ($data.machine_id) { return $data.machine_id }
+        }
+        $mid = [guid]::NewGuid().ToString("N")
+        $payload = @{ machine_id = $mid; platform = "windows"; installed_date = (Get-Date -Format "yyyy-MM-dd"); tool = "launcher-auto" } | ConvertTo-Json -Compress
+        if (-not (Test-Path $DG)) { New-Item -ItemType Directory -Force -Path $DG | Out-Null }
+        [System.IO.File]::WriteAllText($idFile, $payload)
+        return $mid
+    } catch {
+        return "unknown"
+    }
+}
+
+function Get-TelemetryConsent {
+    $idFile = Join-Path $DG "identity.json"
+    try {
+        if (Test-Path $idFile) {
+            $data = Get-Content $idFile -Raw | ConvertFrom-Json
+            if ($data.telemetry) { return $data.telemetry }
+        }
+    } catch {}
+    return ""
+}
+
+function Set-TelemetryConsent([string]$Value) {
+    $idFile = Join-Path $DG "identity.json"
+    try {
+        if (-not (Test-Path $DG)) { New-Item -ItemType Directory -Force -Path $DG | Out-Null }
+        $data = @{}
+        if (Test-Path $idFile) {
+            try { $data = Get-Content $idFile -Raw | ConvertFrom-Json } catch {}
+            # Convert PSObject to hashtable
+            $ht = @{}; $data.PSObject.Properties | ForEach-Object { $ht[$_.Name] = $_.Value }; $data = $ht
+        }
+        $data["telemetry"] = $Value
+        [System.IO.File]::WriteAllText($idFile, ($data | ConvertTo-Json -Compress))
+    } catch {}
+}
+
+function Request-TelemetryConsent {
+    $consent = Get-TelemetryConsent
+    if ($consent -eq "enabled" -or $consent -eq "disabled") { return }
+    Write-Host ""
+    Write-Host "[$Tool] Help improve graperoot by sharing anonymous error reports?"
+    Write-Host "[$Tool] This sends only error type and step (no code, paths, or personal data)."
+    $answer = ""
+    try { $answer = Read-Host "[$Tool] Enable telemetry? (y/n)" } catch { $answer = "" }
+    if ($answer -match '^[Yy]') {
+        Set-TelemetryConsent "enabled"
+        Write-Host "[$Tool] Telemetry enabled. Thank you!"
+    } else {
+        Set-TelemetryConsent "disabled"
+        Write-Host "[$Tool] Telemetry disabled. No data will be sent."
+    }
+    Write-Host ""
+}
+
+function Send-CliError([string]$Step, [string]$ErrorMessage) {
+    try {
+        if ((Get-TelemetryConsent) -ne "enabled") { return }
+        $body = @{
+            type = "cli_error"
+            platform = "windows"
+            machine_id = (Get-MachineId)
+            error_message = $ErrorMessage
+            script_step = $Step
+            tool = $Tool
+        } | ConvertTo-Json -Compress
+        Invoke-WebRequest -Uri $WebhookUrl -Method Post -Body $body -ContentType "application/json" -UseBasicParsing -TimeoutSec 3 | Out-Null
+    } catch {}
+}
 
 function Get-Text([string]$Uri) {
     $response = Invoke-WebRequest $Uri -UseBasicParsing -TimeoutSec 5
@@ -201,6 +277,9 @@ function Create-Venv([string]$PyExe, [string]$VenvDir) {
 try {
     if (-not (Test-Path $DG)) { New-Item -ItemType Directory -Force -Path $DG | Out-Null }
 
+    # -- Telemetry opt-in (one-time prompt) --
+    Request-TelemetryConsent
+
     # -- Clean up stale venv tombstones in background (venv._old_* and venv._broken_*) --
     Get-ChildItem -Path $DG -Directory -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -match '^venv\.(_old_|_broken_)' } |
@@ -313,6 +392,7 @@ try {
             $msg = "No Python 3.10+ found. Install from https://python.org/downloads"
             Write-Host "[$Tool] ERROR: $msg"
             Write-Host "[$Tool] After installing, close and reopen your terminal, then run dg again."
+            Send-CliError "Python setup" $msg
             throw $msg
         }
         $pyVer = if ($foundPy -eq "py -3") { & py -3 --version 2>$null } else { & $foundPy --version 2>$null }
@@ -324,6 +404,7 @@ try {
         } else {
             $msg = "All venv creation methods failed (python=$foundPy). Install Python from https://python.org/downloads"
             Write-Host "[$Tool] ERROR: $msg"
+            Send-CliError "Venv creation" $msg
             throw $msg
         }
 
@@ -336,6 +417,7 @@ try {
         }
         if ($pipExit -ne 0) {
             $msg = "pip install failed (exit $pipExit)"
+            Send-CliError "Pip install" $msg
             throw $msg
         }
         Write-Host "[$Tool] Dependencies installed."
@@ -362,6 +444,7 @@ try {
             if ((Invoke-NativeQuiet $pip @("install", "graperoot", "--upgrade", "--quiet", "--no-cache-dir")) -eq 0) {
                 $grapeOk = $true
             } else {
+                Send-CliError "Graperoot install" "graperoot install failed and no .py fallback available"
                 throw "graperoot install failed and no .py fallback available. Run: pip install graperoot"
             }
         }
@@ -460,6 +543,7 @@ try {
             $tail = ((Get-Content $scanErr -Tail 20 -ErrorAction SilentlyContinue) -join " ") -replace '\s+', ' '
             if ($tail.Length -gt 700) { $tail = $tail.Substring(0, 700) }
         }
+        Send-CliError "Project scan" "project scan failed: $tail"
         throw "project scan failed"
     }
     if (Test-Path $scanErr) { Remove-Item $scanErr -Force -ErrorAction SilentlyContinue }
@@ -501,6 +585,7 @@ try {
         Set-Content -Path $portFile -Value "$port" -Encoding UTF8
         if (-not (Wait-Port -Port $port -Tries 15)) {
             Stop-McpServer $pidFile $portFile
+            Send-CliError "MCP server" "MCP server did not start after retry"
             throw "MCP server did not start after retry"
         }
         Write-Host "[$Tool] MCP server recovered on port $port."
@@ -520,6 +605,7 @@ try {
             Stop-McpServer $pidFile $portFile
             Write-Host "[$Tool] ERROR: could not auto-install codex CLI."
             Write-Host "[$Tool]   npm install -g @openai/codex"
+            Send-CliError "Codex install" "could not auto-install codex CLI"
             exit 1
         }
         Write-Host "[$Tool] codex CLI installed."
@@ -531,6 +617,7 @@ try {
     if (-not $npxCmd) {
         Stop-McpServer $pidFile $portFile
         Write-Host "[$Tool] Error: npx not found. Install Node.js from https://nodejs.org"
+        Send-CliError "npx check" "npx not found"
         exit 1
     }
     if (-not (Get-Command mcp-remote -ErrorAction SilentlyContinue)) {
@@ -561,6 +648,7 @@ try {
         Write-Host "[$Tool]   npm install -g @openai/codex mcp-remote"
         Write-Host "[$Tool]   Then run dg again."
         Write-Host "[$Tool] If it still fails, join Discord: https://discord.gg/rxgVVgCh"
+        Send-CliError "MCP registration" "failed to register MCP with codex after auto-fix"
         exit 1
     }
     Write-Host "[$Tool] MCP registered -> http://localhost:$port/mcp (via mcp-remote)"
@@ -583,6 +671,10 @@ try {
         Pop-Location
         if ($hasNativePref) { $global:PSNativeCommandUseErrorActionPreference = $prevNativePref }
     }
+    # Ignore normal user-initiated termination: SIGINT/Ctrl+C (130) and Windows CTRL_C_EVENT (-1073741510 / 0xC000013A)
+    if ($codexExit -ne 0 -and $codexExit -ne 130 -and $codexExit -ne -1073741510) {
+        Send-CliError "Running Codex" "Codex exited with code $codexExit in dg.ps1"
+    }
 
     Write-Host ""
     Write-Host "[$Tool] Cleaning up..."
@@ -592,6 +684,7 @@ try {
     exit $codexExit
 } catch {
     $message = "$($_.Exception.Message)"
+    Send-CliError "Unhandled" $message
     Write-Host "[$Tool] Error: $message" -ForegroundColor Red
     exit 1
 }

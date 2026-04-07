@@ -1,3 +1,10 @@
+3.9.54
+- Added: opt-in telemetry consent -- help us improve graperoot! One-time prompt, no private data or codebase info is ever sent
+- Added: anonymous error reporting (only if you opt in) -- helps us fix crashes faster
+- Added: one-time feedback prompt (only if telemetry enabled)
+- Added: dgc/graperoot now passes all claude CLI flags through (--model, --verbose, --allowedTools, etc.)
+- Added: typo detection for tool names (e.g. graperoot --claud suggests --claude)
+
 3.9.53
 - Fixed: PS5.1 parse crash on R2-served scripts - replaced all remaining UTF-8 em-dashes with ASCII (byte 0x94 in Windows-1252 is interpreted as a string delimiter, breaking brace matching)
 
