@@ -1,3 +1,9 @@
+3.9.57
+- Fixed: shell parse crash on Linux (tr quoting in telemetry/feedback curl) -- use octal escapes
+- Fixed: Gemini CLI not picking up dual graph policy (was writing to CLAUDE.md instead of GEMINI.md)
+- Fixed: launching two assistants on same project kills the first one's MCP server (per-assistant PID/port files)
+- Fixed: Ctrl+C now reliably kills MCP server for CLI assistants (explicit INT/TERM trap)
+
 3.9.56
 - Fixed: "unbound variable _LAUNCH_ARGS" crash when launching assistant without prompt or extra flags (set -u + empty array in bash < 4.4)
 

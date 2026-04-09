@@ -99,6 +99,7 @@ done
 $_PROJECT_SET || PROJECT="$(pwd)"
 PROJECT="$(cd "$PROJECT" && pwd)"
 DATA_DIR="$PROJECT/.dual-graph"
+RUN_DIR="$DATA_DIR/run/$ASSISTANT"
 CURRENT_STEP="Initializing launcher"
 TELEMETRY_WEBHOOK="https://script.google.com/macros/s/AKfycbyq_5igbBUORhSqMNktAoX2GQg8BadKcYZOTV-XRUr3vbY3QuK7jjS8EWLg_pZyMDuD/exec"
 FEEDBACK_WEBHOOK="https://script.google.com/macros/s/AKfycbyq_5igbBUORhSqMNktAoX2GQg8BadKcYZOTV-XRUr3vbY3QuK7jjS8EWLg_pZyMDuD/exec"
@@ -256,7 +257,7 @@ _send_cli_error() {
   # Fire-and-forget POST -- never block or fail the launcher
   (curl -sf -X POST "$TELEMETRY_WEBHOOK" \
     -H "Content-Type: application/json" \
-    -d "{\"type\":\"cli_error\",\"platform\":\"$(_platform_name)\",\"machine_id\":\"$(_machine_id)\",\"error_message\":\"$(echo "$errmsg" | head -c 500 | tr '"\\' '..')\",\"script_step\":\"$step\",\"tool\":\"$TOOL_LABEL\"}" \
+    -d "{\"type\":\"cli_error\",\"platform\":\"$(_platform_name)\",\"machine_id\":\"$(_machine_id)\",\"error_message\":\"$(echo "$errmsg" | head -c 500 | tr '\042\134' '..')\",\"script_step\":\"$step\",\"tool\":\"$TOOL_LABEL\"}" \
     --max-time 3 >/dev/null 2>&1 || true) &
 }
 
@@ -281,14 +282,14 @@ raise SystemExit(0 if parse(sys.argv[1]) > parse(sys.argv[2]) else 1)
 PY
 }
 
-# ── Kill any stale MCP server for this project (frees its port before scanning) ─
-if [[ -f "$DATA_DIR/mcp_server.pid" ]]; then
-  _OLD_PID="$(cat "$DATA_DIR/mcp_server.pid")"
+# ── Kill any stale MCP server for this assistant (frees its port before scanning) ─
+if [[ -f "$RUN_DIR/mcp_server.pid" ]]; then
+  _OLD_PID="$(cat "$RUN_DIR/mcp_server.pid")"
   if kill -0 "$_OLD_PID" 2>/dev/null; then
     kill "$_OLD_PID" 2>/dev/null || true
     sleep 0.3
   fi
-  rm -f "$DATA_DIR/mcp_server.pid"
+  rm -f "$RUN_DIR/mcp_server.pid"
 fi
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -330,8 +331,12 @@ if [[ "$ASSISTANT" == "codex" ]]; then
   DOC_NAME="CODEX.md"
   POLICY_MARKER="dg-policy-v5"
   CONTEXT_DIR="$PROJECT/.dual-graph-context"
+elif [[ "$ASSISTANT" == "gemini" ]]; then
+  DOC_FILE="$PROJECT/GEMINI.md"
+  DOC_NAME="GEMINI.md"
+  POLICY_MARKER="dgc-policy-v11"
 else
-  # claude, cursor, gemini all share CLAUDE.md as their context policy file
+  # claude, cursor, copilot share CLAUDE.md as their context policy file
   DOC_FILE="$PROJECT/CLAUDE.md"
   DOC_NAME="CLAUDE.md"
   POLICY_MARKER="dgc-policy-v11"
@@ -721,6 +726,7 @@ echo "[$TOOL_LABEL] Data    : $DATA_DIR"
 echo ""
 
 mkdir -p "$DATA_DIR"
+mkdir -p "$RUN_DIR"
 
 if [[ -f "$PROJECT/.gitignore" ]] && ! grep -qx '.dual-graph/' "$PROJECT/.gitignore" 2>/dev/null; then
   echo '.dual-graph/' >> "$PROJECT/.gitignore"
@@ -1211,11 +1217,11 @@ env \
   DG_BASE_URL="http://localhost:$MCP_PORT" \
   PORT="$MCP_PORT" \
   "${_MCP_CMD[@]}" \
-  >> "$DATA_DIR/mcp_server.log" 2>&1 &
+  >> "$RUN_DIR/mcp_server.log" 2>&1 &
 MCP_PID=$!
-echo "$MCP_PID" > "$DATA_DIR/mcp_server.pid"
-echo "$MCP_PORT" > "$DATA_DIR/mcp_port"
-trap 'echo ""; echo "[$TOOL_LABEL] Shutting down MCP server (PID $MCP_PID)..."; kill "$MCP_PID" 2>/dev/null; rm -f "$DATA_DIR/mcp_server.pid" "$DATA_DIR/mcp_port"' EXIT INT TERM HUP
+echo "$MCP_PID" > "$RUN_DIR/mcp_server.pid"
+echo "$MCP_PORT" > "$RUN_DIR/mcp_port"
+trap 'echo ""; echo "[$TOOL_LABEL] Shutting down MCP server (PID $MCP_PID)..."; kill "$MCP_PID" 2>/dev/null; rm -f "$RUN_DIR/mcp_server.pid" "$RUN_DIR/mcp_port"' EXIT INT TERM HUP
 
 echo "[$TOOL_LABEL] Waiting for MCP server..."
 CURRENT_STEP="Waiting for MCP server"
@@ -1240,11 +1246,11 @@ if [[ "$_MCP_READY" != "1" ]]; then
     DG_BASE_URL="http://localhost:$MCP_PORT" \
     PORT="$MCP_PORT" \
     "${_MCP_CMD[@]}" \
-    >> "$DATA_DIR/mcp_server.log" 2>&1 &
+    >> "$RUN_DIR/mcp_server.log" 2>&1 &
   MCP_PID=$!
-  echo "$MCP_PID" > "$DATA_DIR/mcp_server.pid"
-  echo "$MCP_PORT" > "$DATA_DIR/mcp_port"
-  trap 'echo ""; echo "[$TOOL_LABEL] Shutting down MCP server (PID $MCP_PID)..."; kill "$MCP_PID" 2>/dev/null; rm -f "$DATA_DIR/mcp_server.pid" "$DATA_DIR/mcp_port"' EXIT INT TERM HUP
+  echo "$MCP_PID" > "$RUN_DIR/mcp_server.pid"
+  echo "$MCP_PORT" > "$RUN_DIR/mcp_port"
+  trap 'echo ""; echo "[$TOOL_LABEL] Shutting down MCP server (PID $MCP_PID)..."; kill "$MCP_PID" 2>/dev/null; rm -f "$RUN_DIR/mcp_server.pid" "$RUN_DIR/mcp_port"' EXIT INT TERM HUP
   _MCP_READY=0
   for i in $(seq 1 15); do
     if nc -z localhost "$MCP_PORT" 2>/dev/null || \
@@ -1255,7 +1261,7 @@ if [[ "$_MCP_READY" != "1" ]]; then
     sleep 1
   done
   if [[ "$_MCP_READY" != "1" ]]; then
-    echo "[$TOOL_LABEL] Error: MCP server did not start after retry. Check $DATA_DIR/mcp_server.log"
+    echo "[$TOOL_LABEL] Error: MCP server did not start after retry. Check $RUN_DIR/mcp_server.log"
     _send_cli_error "Starting MCP server" "MCP server did not start in dual_graph_launch.sh (retried)"
     exit 1
   fi
@@ -1270,7 +1276,7 @@ echo ""
 if [[ "$ASSISTANT" == "claude" ]]; then
   cat > "$DATA_DIR/prime.sh" << PRIMEEOF
 #!/usr/bin/env bash
-PORT=\$(cat "$DATA_DIR/mcp_port" 2>/dev/null || echo $MCP_PORT)
+PORT=\$(cat "$RUN_DIR/mcp_port" 2>/dev/null || echo $MCP_PORT)
 OUT=\$(curl -sf --max-time 2 "http://localhost:\$PORT/prime" 2>/dev/null || true)
 if [[ -n "\$OUT" ]]; then
   echo "\$OUT"
@@ -1358,7 +1364,7 @@ PYEOF
 )
   if [[ -n "\$USAGE" ]]; then
     # POST to MCP graph server (always running, reliable)
-    MCP_PORT=\$(cat "$DATA_DIR/mcp_port" 2>/dev/null || echo "$MCP_PORT")
+    MCP_PORT=\$(cat "$RUN_DIR/mcp_port" 2>/dev/null || echo "$MCP_PORT")
     curl -sf -X POST "http://localhost:\$MCP_PORT/log" \
       -H "Content-Type: application/json" \
       -d "\$USAGE" \
@@ -1811,7 +1817,7 @@ if [[ ! -f "$_FEEDBACK_MARKER" ]] && [[ -t 0 ]] && [[ "$(_get_telemetry_consent)
     read -r -t 30 _SUGGESTION 2>/dev/null || _SUGGESTION=""
     (curl -sf -X POST "$FEEDBACK_WEBHOOK" \
       -H "Content-Type: application/json" \
-      -d "{\"type\":\"feedback\",\"platform\":\"$(_platform_name)\",\"machine_id\":\"$(_machine_id)\",\"rating\":$_RATING,\"suggestion\":\"$(echo "$_SUGGESTION" | head -c 300 | tr '"\\' '..')\",\"tool\":\"$TOOL_LABEL\"}" \
+      -d "{\"type\":\"feedback\",\"platform\":\"$(_platform_name)\",\"machine_id\":\"$(_machine_id)\",\"rating\":$_RATING,\"suggestion\":\"$(echo "$_SUGGESTION" | head -c 300 | tr '\042\134' '..')\",\"tool\":\"$TOOL_LABEL\"}" \
       --max-time 5 >/dev/null 2>&1 || true) &
     echo "[$TOOL_LABEL] Thanks for the feedback!"
   fi
@@ -1870,7 +1876,7 @@ fi
 # 4. Verify MCP server is still alive (it may have crashed between startup and now)
 if ! kill -0 "$MCP_PID" 2>/dev/null; then
   echo "[$TOOL_LABEL] ERROR: MCP server (PID $MCP_PID) died before $ASSISTANT started."
-  _MCP_LOG_TAIL="$(tail -n 20 "$DATA_DIR/mcp_server.log" 2>/dev/null | tr '\n' ' ' | cut -c1-500)"
+  _MCP_LOG_TAIL="$(tail -n 20 "$RUN_DIR/mcp_server.log" 2>/dev/null | tr '\n' ' ' | cut -c1-500)"
   echo "[$TOOL_LABEL] Last log: $_MCP_LOG_TAIL"
   echo "[$TOOL_LABEL] Try running $TOOL_LABEL again. If it persists, join Discord: https://discord.gg/rxgVVgCh"
   _send_cli_error "Pre-flight checks" "MCP server died before Claude started: $_MCP_LOG_TAIL"
@@ -1901,9 +1907,9 @@ if [[ "$ASSISTANT" == "cursor" ]]; then
   echo "[$TOOL_LABEL]   Then reload Cursor — dual-graph will connect automatically."
   echo "[$TOOL_LABEL]"
   echo "[$TOOL_LABEL] Opening project in Cursor..."
-  "$CURSOR_BIN" "$PROJECT" 2>"$DATA_DIR/assistant_stderr.log" &
+  "$CURSOR_BIN" "$PROJECT" 2>"$RUN_DIR/assistant_stderr.log" &
   echo "[$TOOL_LABEL] Press Ctrl+C to stop the MCP server when you are done."
-  trap 'echo ""; echo "[$TOOL_LABEL] Shutting down MCP server (PID $MCP_PID)..."; kill "$MCP_PID" 2>/dev/null; rm -f "$DATA_DIR/mcp_server.pid" "$DATA_DIR/mcp_port"; exit 0' INT TERM HUP
+  trap 'echo ""; echo "[$TOOL_LABEL] Shutting down MCP server (PID $MCP_PID)..."; kill "$MCP_PID" 2>/dev/null; rm -f "$RUN_DIR/mcp_server.pid" "$RUN_DIR/mcp_port"; exit 0' INT TERM HUP
   while true; do sleep 5 & wait $!; done
 elif [[ "$ASSISTANT" == "copilot" ]]; then
   # VS Code is an IDE — open project and keep MCP server alive until Ctrl+C.
@@ -1914,19 +1920,20 @@ elif [[ "$ASSISTANT" == "copilot" ]]; then
   echo "[$TOOL_LABEL]   Then reload VS Code — dual-graph will connect automatically."
   echo "[$TOOL_LABEL]"
   echo "[$TOOL_LABEL] Opening project in VS Code..."
-  "$CODE_BIN" "$PROJECT" 2>"$DATA_DIR/assistant_stderr.log" &
+  "$CODE_BIN" "$PROJECT" 2>"$RUN_DIR/assistant_stderr.log" &
   echo "[$TOOL_LABEL] Press Ctrl+C to stop the MCP server when you are done."
-  trap 'echo ""; echo "[$TOOL_LABEL] Shutting down MCP server (PID $MCP_PID)..."; kill "$MCP_PID" 2>/dev/null; rm -f "$DATA_DIR/mcp_server.pid" "$DATA_DIR/mcp_port"; exit 0' INT TERM HUP
+  trap 'echo ""; echo "[$TOOL_LABEL] Shutting down MCP server (PID $MCP_PID)..."; kill "$MCP_PID" 2>/dev/null; rm -f "$RUN_DIR/mcp_server.pid" "$RUN_DIR/mcp_port"; exit 0' INT TERM HUP
   while true; do sleep 5 & wait $!; done
 else
   # Build launch args: optional prompt + all passthrough flags
   _LAUNCH_ARGS=()
   [[ -n "$PROMPT" ]] && _LAUNCH_ARGS+=("$PROMPT")
   [[ ${#CLAUDE_EXTRA_ARGS[@]} -gt 0 ]] && _LAUNCH_ARGS+=("${CLAUDE_EXTRA_ARGS[@]}")
+  trap 'echo ""; echo "[$TOOL_LABEL] Shutting down MCP server (PID $MCP_PID)..."; kill "$MCP_PID" 2>/dev/null; rm -f "$RUN_DIR/mcp_server.pid" "$RUN_DIR/mcp_port"; exit 130' INT TERM HUP
   if [[ ${#_LAUNCH_ARGS[@]} -gt 0 ]]; then
-    "$ASSISTANT" "${_LAUNCH_ARGS[@]}" 2>"$DATA_DIR/assistant_stderr.log"
+    "$ASSISTANT" "${_LAUNCH_ARGS[@]}" 2>"$RUN_DIR/assistant_stderr.log"
   else
-    "$ASSISTANT" 2>"$DATA_DIR/assistant_stderr.log"
+    "$ASSISTANT" 2>"$RUN_DIR/assistant_stderr.log"
   fi
 fi
 ASSISTANT_EXIT=$?
@@ -1962,7 +1969,7 @@ fi
 
 # Ignore normal termination: 0=clean, 130=SIGINT (Ctrl+C), 143=SIGTERM
 if [[ "$ASSISTANT_EXIT" -ne 0 && "$ASSISTANT_EXIT" -ne 130 && "$ASSISTANT_EXIT" -ne 143 ]]; then
-  _STDERR_TAIL="$(tail -n 10 "$DATA_DIR/assistant_stderr.log" 2>/dev/null | tr '\n' ' ' | cut -c1-500)"
+  _STDERR_TAIL="$(tail -n 10 "$RUN_DIR/assistant_stderr.log" 2>/dev/null | tr '\n' ' ' | cut -c1-500)"
   echo ""
   echo "[$TOOL_LABEL] $ASSISTANT exited with code $ASSISTANT_EXIT."
   if [[ -n "$_STDERR_TAIL" ]]; then
@@ -1983,5 +1990,5 @@ if [[ "$ASSISTANT_EXIT" -ne 0 && "$ASSISTANT_EXIT" -ne 130 && "$ASSISTANT_EXIT" 
   _send_cli_error "Running $ASSISTANT" "$ASSISTANT exited=$ASSISTANT_EXIT stderr=$_STDERR_TAIL"
 fi
 # Clean up stderr log on success
-[[ "$ASSISTANT_EXIT" -eq 0 ]] && rm -f "$DATA_DIR/assistant_stderr.log" 2>/dev/null
+[[ "$ASSISTANT_EXIT" -eq 0 ]] && rm -f "$RUN_DIR/assistant_stderr.log" 2>/dev/null
 exit "$ASSISTANT_EXIT"
