@@ -1,4 +1,6 @@
-# Dual-Graph — Compounding Context for AI Coding Assistants
+# GrapeRoot — Compounding Context for AI Coding Assistants
+
+**[graperoot.dev](https://graperoot.dev)** · [Docs](https://graperoot.dev/docs) · [Benchmarks](https://graperoot.dev/benchmarks) · [Pro](https://graperoot.dev/graperoot-pro) · [Discord](https://discord.com/invite/YwKdQATY2d)
 
 A context engine that makes Claude Code, Codex CLI, Gemini CLI, Cursor, OpenCode, and GitHub Copilot **30-45% cheaper** without sacrificing quality. It builds a semantic graph of your codebase and pre-loads the right files into every prompt — so your AI spends tokens reasoning, not exploring.
 
@@ -6,7 +8,7 @@ Works on **macOS, Linux, and Windows**. Supports any project size.
 
 Supports **TypeScript, JavaScript, Python, Go, Swift, Rust, Java, Kotlin, C#, Ruby, and PHP**.
 
-**Join the community: [discord.gg/ptyr7KJz](https://discord.com/invite/YwKdQATY2d)**
+**Join the community: [discord.com/invite/YwKdQATY2d](https://discord.com/invite/YwKdQATY2d)**
 
 ---
 
@@ -28,7 +30,7 @@ Token savings **compound** across a session. The graph remembers which files wer
 
 ## Results
 
-Benchmarked across 80+ prompts (5 complexity levels) on a real-world full-stack app:
+Benchmarked across 80+ prompts (5 complexity levels) on a real-world full-stack app. Full results at [graperoot.dev/benchmarks](https://graperoot.dev/benchmarks).
 
 | Metric | Without Dual-Graph | With Dual-Graph |
 |--------|-------------------|-----------------|
@@ -42,6 +44,8 @@ Cost wins on **16 out of 20** prompts. Quality equal or better on all complexity
 ---
 
 ## Install
+
+Full setup guide at [graperoot.dev/setup](https://graperoot.dev/setup).
 
 **macOS / Linux:**
 ```bash
@@ -241,7 +245,7 @@ Remove-Item "$env:USERPROFILE\.claude\token-counter-stop.ps1" -Force -ErrorActio
 
 The launcher scripts (`bin/`) are open source under Apache 2.0. PRs are welcome — bug fixes, new AI assistant support, install improvements, docs.
 
-**Note:** The graph engine ([`graperoot`](https://pypi.org/project/graperoot/)) is a separate proprietary component distributed via PyPI. The launcher scripts and tooling in this repo are fully open source; the core graph intelligence is not.
+**Note:** The graph engine ([`graperoot`](https://pypi.org/project/graperoot/)) is a separate proprietary component distributed via PyPI. The launcher scripts and tooling in this repo are fully open source; the core graph intelligence is not. See [graperoot.dev/graperoot-pro](https://graperoot.dev/graperoot-pro) for Pro features.
 
 ---
 
@@ -249,7 +253,7 @@ The launcher scripts (`bin/`) are open source under Apache 2.0. PRs are welcome 
 
 Have a question, found a bug, or want to share feedback?
 
-**Join the Discord: [discord.gg/ptyr7KJz](https://discord.com/invite/YwKdQATY2d)**
+**Join the Discord: [discord.com/invite/YwKdQATY2d](https://discord.com/invite/YwKdQATY2d)**
 
 - Get help with setup
 - Report bugs
@@ -262,7 +266,7 @@ Have a question, found a bug, or want to share feedback?
 
 A huge thank you to everyone who used early versions of Dual-Graph and shared feedback through the telemetry program — your usage data helped us squash bugs and stabilize the tool into what it is today. We've now removed all telemetry in favor of full transparency.
 
-Want to keep helping shape the project? **[Join the Discord](https://discord.com/invite/YwKdQATY2d)**
+Want to keep helping shape the project? **[Join the Discord](https://discord.com/invite/YwKdQATY2d)** or visit [graperoot.dev](https://graperoot.dev).
 
 ---
 
